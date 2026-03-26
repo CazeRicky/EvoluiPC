@@ -4,7 +4,7 @@
 
 ---
 
-## 📊 Lean Canvas 2.0 (Planejamento Estratégico)
+## 📊 Lean Canvas (Planejamento Estratégico)
 
 Organização sistêmica do projeto seguindo a ordem lógica de desenvolvimento (1-9).
 
