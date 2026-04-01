@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EvoluiPC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="topbar">
+      <div>
+        <p class="kicker"></p>
+        <h1>EvoluiPC Control Center</h1>
+      </div>
+      <button id="newSessionBtn" class="ghost-btn">Nova simulacao</button>
+    </header>
+
+    <main class="layout">
+      <aside class="side-nav">
+        <button class="tab-btn active" data-tab="overview">Visao geral</button>
+        <button class="tab-btn" data-tab="scan">Entrada Desktop</button>
+        <button class="tab-btn" data-tab="route">Rota de upgrade</button>
+        <button class="tab-btn" data-tab="catalog">Catalogo recomendado</button>
+      </aside>
+
+      <section class="panel tab-panel active" id="overview">
+        <h2>Resumo do computador</h2>
+        <p class="subtitle">
+          Esse painel representa o estado atual enviado pelo executavel do computador.
+        </p>
+
+        <div class="metric-grid" id="metricGrid"></div>
+
+        <div class="status-card">
+          <h3>Diagnostico rapido</h3>
+          <ul id="diagnosticList"></ul>
+        </div>
+      </section>
+
+      <section class="panel tab-panel" id="scan">
+        <h2>Entrada Desktop</h2>
+        <p class="subtitle">Faça login uma vez e carregue os dados salvos do usuario no Django.</p>
+
+        <div class="scan-grid">
+          <label for="apiBaseInput">Base da API</label>
+          <input id="apiBaseInput" type="text" value="http://127.0.0.1:8000" />
+
+          <label for="emailInput">Email</label>
+          <input id="emailInput" type="email" placeholder="Seu email (opcional no login)" />
+
+          <label for="usernameInput">Usuario</label>
+          <input id="usernameInput" type="text" placeholder="Seu usuario" />
+
+          <label for="passwordInput">Senha</label>
+          <input id="passwordInput" type="password" placeholder="Sua senha" />
+
+          <label for="authTokenInput">Token de acesso</label>
+          <input id="authTokenInput" type="text" placeholder="Preenchido automaticamente no login" />
+        </div>
+
+        <div class="row-actions">
+          <button id="registerBtn">Cadastrar</button>
+          <button id="loginBtn">Entrar</button>
+          <button id="logoutBtn">Sair</button>
+          <button id="fetchMachineBtn">Buscar meus dados</button>
+        </div>
+
+        <p id="sessionInfo" class="subtitle compact"></p>
+        <p id="scanMessage" class="message"></p>
+      </section>
+
+      <section class="panel tab-panel" id="route">
+        <h2>Arvore de evolucao</h2>
+        <p class="subtitle">Ordem sugerida de upgrade para melhor custo-beneficio.</p>
+
+        <ol id="upgradeRoute" class="route-list"></ol>
+      </section>
+
+      <section class="panel tab-panel" id="catalog">
+        <h2>Componentes recomendados</h2>
+        <p class="subtitle">Mock inicial para alinhar layout com o backend.</p>
+
+        <div id="catalogGrid" class="catalog-grid"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
