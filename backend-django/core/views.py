@@ -15,6 +15,14 @@ from .serializers import (
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
 
 
+def get_user_snapshot(user):
+    return MachineSnapshot.objects.filter(user=user).first()
+
+
+def build_snapshot_response(snapshot):
+    return Response(MachineSnapshotSerializer(snapshot).data, status=status.HTTP_200_OK)
+
+
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -114,40 +122,34 @@ class MachineSyncView(APIView):
             },
         )
 
-        return Response(MachineSnapshotSerializer(snapshot).data, status=status.HTTP_200_OK)
+        return build_snapshot_response(snapshot)
 
 
 class MachineCurrentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = MachineSnapshot.objects.filter(user=request.user).first()
+        snapshot = get_user_snapshot(request.user)
         if not snapshot:
             return Response({"detail": "Nenhum snapshot encontrado para o usuario."}, status=404)
-        return Response(
-            {
-                "schema_version": snapshot.schema_version,
-                "machine": snapshot.machine,
-                "diagnostics": snapshot.diagnostics,
-            }
-        )
+        return build_snapshot_response(snapshot)
 
 
 class UpgradeRouteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = MachineSnapshot.objects.filter(user=request.user).first()
+        snapshot = get_user_snapshot(request.user)
         if not snapshot:
             return Response({"route": []}, status=200)
-        return Response({"route": snapshot.route})
+        return Response({"schema_version": snapshot.schema_version, "route": snapshot.route})
 
 
 class RecommendationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = MachineSnapshot.objects.filter(user=request.user).first()
+        snapshot = get_user_snapshot(request.user)
         if not snapshot:
             return Response({"catalog": []}, status=200)
-        return Response({"catalog": snapshot.catalog})
+        return Response({"schema_version": snapshot.schema_version, "catalog": snapshot.catalog})
