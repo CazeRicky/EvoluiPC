@@ -18,7 +18,7 @@ class AuthAndMachineFlowTests(APITestCase):
         token = register_response.data["token"]
 
         sync_response = self.client.post(
-            "/api/machine/sync",
+            "/api/machine",
             {
                 "schema_version": "1.0",
                 "machine": {
@@ -43,13 +43,31 @@ class AuthAndMachineFlowTests(APITestCase):
         self.assertEqual(machine_response.status_code, 200)
         self.assertEqual(machine_response.data["schema_version"], "1.0")
         self.assertEqual(machine_response.data["machine"]["cpu"], "Ryzen 5 5600")
+        self.assertEqual(machine_response.data["diagnostics"], ["GPU equilibrada para Full HD"])
+        self.assertEqual(machine_response.data["route"][0]["step"], "Upgrade 1")
+
+        route_response = self.client.get(
+            "/api/upgrade-route/me",
+            HTTP_AUTHORIZATION=f"Token {token}",
+        )
+        self.assertEqual(route_response.status_code, 200)
+        self.assertEqual(route_response.data["schema_version"], "1.0")
+        self.assertEqual(route_response.data["route"][0]["action"], "Mais RAM")
+
+        catalog_response = self.client.get(
+            "/api/recommendations/me",
+            HTTP_AUTHORIZATION=f"Token {token}",
+        )
+        self.assertEqual(catalog_response.status_code, 200)
+        self.assertEqual(catalog_response.data["schema_version"], "1.0")
+        self.assertEqual(catalog_response.data["catalog"][0]["name"], "Kit 32GB DDR4")
 
     def test_rejects_unsupported_schema_version(self):
         user = User.objects.create_user(username="schema_user", password="12345678")
         token = Token.objects.create(user=user)
 
         response = self.client.post(
-            "/api/machine/sync",
+            "/api/machine",
             {
                 "schema_version": "2.0",
                 "machine": {"cpu": "i7"},

@@ -1,6 +1,4 @@
-// ============================================
-// Estado da Aplicação
-// ============================================
+// Estado inicial do app
 
 const initialState = {
   machine: {
@@ -66,9 +64,7 @@ const STORAGE_KEYS = {
 
 const state = structuredClone(initialState);
 
-// ============================================
-// Gerenciamento de Telas
-// ============================================
+// Alterna entre login e dashboard
 
 const authScreen = document.getElementById("authScreen");
 const dashboardScreen = document.getElementById("dashboardScreen");
@@ -83,9 +79,7 @@ function showDashboardScreen() {
   dashboardScreen.classList.add("active");
 }
 
-// ============================================
-// Seletores DOM - Autenticação
-// ============================================
+// Campos de autenticação
 
 const authApiBase = document.getElementById("authApiBase");
 const loginForm = document.getElementById("loginForm");
@@ -101,9 +95,7 @@ const authLoginMessage = document.getElementById("authLoginMessage");
 const authRegError = document.getElementById("authRegError");
 const authRegMessage = document.getElementById("authRegMessage");
 
-// ============================================
-// Seletores DOM - Dashboard
-// ============================================
+// Campos do dashboard
 
 const metricGrid = document.getElementById("metricGrid");
 const diagnosticList = document.getElementById("diagnosticList");
@@ -120,9 +112,7 @@ const fetchMachineBtn = document.getElementById("fetchMachineBtn");
 const newSessionBtn = document.getElementById("newSessionBtn");
 const logoutTopbarBtn = document.getElementById("logoutTopbarBtn");
 
-// ============================================
-// Renderização do Dashboard
-// ============================================
+// Renderização principal
 
 function renderOverview() {
   metricGrid.innerHTML = "";
@@ -193,9 +183,7 @@ function setSessionInfo(text) {
   sessionInfo.textContent = text;
 }
 
-// ============================================
-// Utilitários
-// ============================================
+// Utilitários de sessão
 
 function sanitizeBaseUrl(url) {
   return url.replace(/\/+$/, "");
@@ -272,9 +260,7 @@ function getStoredApiBase() {
   return localStorage.getItem(STORAGE_KEYS.apiBase) || "http://127.0.0.1:8000";
 }
 
-// ============================================
-// Mensagens de Validação na Autenticação
-// ============================================
+// Mensagens de validação
 
 function clearAuthMessages() {
   authApiError.textContent = "";
@@ -471,9 +457,7 @@ function registerRealtimeValidation(input, validator) {
   });
 }
 
-// ============================================
 // Requisições à API
-// ============================================
 
 async function apiRequest(path, token, method = "GET", payload = null) {
   const baseUrl = sanitizeBaseUrl(authApiBase.value.trim());
@@ -499,9 +483,7 @@ async function apiRequest(path, token, method = "GET", payload = null) {
   return response.json();
 }
 
-// ============================================
-// Lógica de Autenticação
-// ============================================
+// Fluxo de autenticação
 
 async function handleLogin(event) {
   event.preventDefault();
@@ -643,9 +625,7 @@ function handleLogout() {
   setSessionInfo("Sessão encerrada.");
 }
 
-// ============================================
-// API do Dashboard
-// ============================================
+// Dados do dashboard
 
 async function fetchMachineFromApi() {
   const token = authTokenInput.value.trim();
@@ -695,9 +675,7 @@ async function fetchMachineFromApi() {
   }
 }
 
-// ============================================
-// Abas do Dashboard
-// ============================================
+// Abas do dashboard
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -709,9 +687,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
   });
 });
 
-// ============================================
-// Abas de Autenticação (Login/Cadastro)
-// ============================================
+// Tabs de autenticação
 
 document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -727,9 +703,7 @@ document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
   });
 });
 
-// ============================================
-// Event Listeners
-// ============================================
+// Eventos principais
 
 registerRealtimeValidation(authUsername, validateLoginUsername);
 registerRealtimeValidation(authPassword, validateLoginPassword);
@@ -748,9 +722,7 @@ newSessionBtn.addEventListener("click", () => {
   setMessage("Estado resetado para os dados locais do MVP.", "ok");
 });
 
-// ============================================
-// Inicialização
-// ============================================
+// Inicialização do app
 
 function initializeApp() {
   const token = getStoredToken();
