@@ -61,6 +61,7 @@ const STORAGE_KEYS = {
   token: "evoluipc.token",
   email: "evoluipc.email",
   username: "evoluipc.username",
+  appState: "evoluipc.appState",
 };
 
 const state = structuredClone(initialState);
@@ -180,6 +181,7 @@ function applyPayload(payload) {
   renderOverview();
   renderRoute();
   renderCatalog();
+  saveAppState();
 }
 
 function setMessage(text, type) {
@@ -211,6 +213,55 @@ function clearAuthSession() {
   localStorage.removeItem(STORAGE_KEYS.username);
   localStorage.removeItem(STORAGE_KEYS.email);
   localStorage.removeItem(STORAGE_KEYS.apiBase);
+}
+
+function saveAppState() {
+  localStorage.setItem(STORAGE_KEYS.appState, JSON.stringify(state));
+}
+
+function loadAppState() {
+  const rawState = localStorage.getItem(STORAGE_KEYS.appState);
+
+  if (!rawState) {
+    return false;
+  }
+
+  try {
+    const parsedState = JSON.parse(rawState);
+
+    if (!parsedState.machine || !parsedState.diagnostics || !parsedState.route || !parsedState.catalog) {
+      return false;
+    }
+
+    state.machine = parsedState.machine;
+    state.diagnostics = parsedState.diagnostics;
+    state.route = parsedState.route;
+    state.catalog = parsedState.catalog;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createLocalAuthToken(username) {
+  return `local-${username}-${Date.now()}`;
+}
+
+function useLocalAuthSession(username, email = "") {
+  const token = createLocalAuthToken(username);
+  saveAuthSession(token, username, email, authApiBase.value || getStoredApiBase());
+  return {
+    token,
+    user: {
+      username,
+      email,
+    },
+  };
+}
+
+function isNetworkFetchError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("load failed");
 }
 
 function getStoredToken() {
@@ -488,6 +539,18 @@ async function handleLogin(event) {
       showDashboardScreen();
     }, 1000);
   } catch (error) {
+    if (isNetworkFetchError(error)) {
+      const fallbackSession = useLocalAuthSession(username, emailInput.value.trim());
+      authTokenInput.value = fallbackSession.token;
+      usernameInput.value = username;
+      setSessionInfo(`Sessão local ativa para ${username}.`);
+      showAuthSuccess("Backend indisponível. Sessão local salva no navegador.");
+      authPassword.value = "";
+      populateDashboardFromSession();
+      showDashboardScreen();
+      return;
+    }
+
     showAuthError(error.message || "Falha no login. Verifique suas credenciais.");
   } finally {
     loginBtn.disabled = false;
@@ -533,6 +596,19 @@ async function handleRegister(event) {
       showDashboardScreen();
     }, 1000);
   } catch (error) {
+    if (isNetworkFetchError(error)) {
+      const fallbackSession = useLocalAuthSession(username, email);
+      authTokenInput.value = fallbackSession.token;
+      usernameInput.value = username;
+      emailInput.value = email;
+      showAuthSuccess("Backend indisponível. Conta salva localmente no navegador.", true);
+      regPassword.value = "";
+      regPasswordConfirm.value = "";
+      populateDashboardFromSession();
+      showDashboardScreen();
+      return;
+    }
+
     showAuthError(error.message || "Falha no cadastro.", true);
   } finally {
     registerBtn.disabled = false;
@@ -599,6 +675,20 @@ async function fetchMachineFromApi() {
     applyPayload(payload);
     setMessage("Dados carregados com sucesso.", "ok");
   } catch (error) {
+    if (isNetworkFetchError(error) && loadAppState()) {
+      renderOverview();
+      renderRoute();
+      renderCatalog();
+      setMessage("Backend indisponível. Dados carregados do armazenamento local.", "ok");
+      return;
+    }
+
+    if (isNetworkFetchError(error)) {
+      saveAppState();
+      setMessage("Backend indisponível. Dados padrão salvos no navegador.", "ok");
+      return;
+    }
+
     setMessage(error.message || "Erro ao consultar API.", "error");
   } finally {
     fetchMachineBtn.disabled = false;
@@ -654,6 +744,7 @@ fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
 logoutTopbarBtn.addEventListener("click", handleLogout);
 newSessionBtn.addEventListener("click", () => {
   applyPayload(structuredClone(initialState));
+  saveAppState();
   setMessage("Estado resetado para os dados locais do MVP.", "ok");
 });
 
@@ -663,10 +754,15 @@ newSessionBtn.addEventListener("click", () => {
 
 function initializeApp() {
   const token = getStoredToken();
+  const restoredAppState = loadAppState();
 
   renderOverview();
   renderRoute();
   renderCatalog();
+
+  if (!restoredAppState) {
+    saveAppState();
+  }
 
   if (token) {
     populateDashboardFromSession();
