@@ -231,25 +231,14 @@ function loadAppState() {
   }
 }
 
-function createLocalAuthToken(username) {
-  return `local-${username}-${Date.now()}`;
-}
-
-function useLocalAuthSession(username, email = "") {
-  const token = createLocalAuthToken(username);
-  saveAuthSession(token, username, email, authApiBase.value || getStoredApiBase());
-  return {
-    token,
-    user: {
-      username,
-      email,
-    },
-  };
-}
-
 function isNetworkFetchError(error) {
   const message = String(error?.message || "").toLowerCase();
   return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("load failed");
+}
+
+function isUnauthorizedError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("falha 401") || message.includes("status 401") || message.includes("unauthorized");
 }
 
 function getStoredToken() {
@@ -522,14 +511,7 @@ async function handleLogin(event) {
     }, 1000);
   } catch (error) {
     if (isNetworkFetchError(error)) {
-      const fallbackSession = useLocalAuthSession(username, emailInput.value.trim());
-      authTokenInput.value = fallbackSession.token;
-      usernameInput.value = username;
-      setSessionInfo(`Sessão local ativa para ${username}.`);
-      showAuthSuccess("Backend indisponível. Sessão local salva no navegador.");
-      authPassword.value = "";
-      populateDashboardFromSession();
-      showDashboardScreen();
+      showAuthError("Nao foi possivel conectar ao backend. Verifique se o servidor esta rodando.");
       return;
     }
 
@@ -579,15 +561,7 @@ async function handleRegister(event) {
     }, 1000);
   } catch (error) {
     if (isNetworkFetchError(error)) {
-      const fallbackSession = useLocalAuthSession(username, email);
-      authTokenInput.value = fallbackSession.token;
-      usernameInput.value = username;
-      emailInput.value = email;
-      showAuthSuccess("Backend indisponível. Conta salva localmente no navegador.", true);
-      regPassword.value = "";
-      regPasswordConfirm.value = "";
-      populateDashboardFromSession();
-      showDashboardScreen();
+      showAuthError("Nao foi possivel conectar ao backend. Verifique se o servidor esta rodando.", true);
       return;
     }
 
@@ -655,6 +629,13 @@ async function fetchMachineFromApi() {
     applyPayload(payload);
     setMessage("Dados carregados com sucesso.", "ok");
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      clearAuthSession();
+      showAuthScreen();
+      setMessage("Sessao expirada. Faca login novamente.", "error");
+      return;
+    }
+
     if (isNetworkFetchError(error) && loadAppState()) {
       renderOverview();
       renderRoute();
@@ -724,7 +705,7 @@ newSessionBtn.addEventListener("click", () => {
 
 // Inicialização do app
 
-function initializeApp() {
+async function initializeApp() {
   const token = getStoredToken();
   const restoredAppState = loadAppState();
 
@@ -737,6 +718,29 @@ function initializeApp() {
   }
 
   if (token) {
+    if (token.startsWith("local-")) {
+      clearAuthSession();
+      setSessionInfo("Sessao local antiga removida. Faca login novamente.");
+      showAuthScreen();
+      return;
+    }
+
+    try {
+      const me = await apiRequest("/api/auth/me", token);
+      if (!me.user?.username) {
+        throw new Error("Sessao invalida.");
+      }
+    } catch (error) {
+      clearAuthSession();
+      if (isNetworkFetchError(error)) {
+        setSessionInfo("Sem conexao com backend. Faca login quando o servidor voltar.");
+      } else {
+        setSessionInfo("Sessao invalida. Faca login novamente.");
+      }
+      showAuthScreen();
+      return;
+    }
+
     populateDashboardFromSession();
     showDashboardScreen();
   } else {
