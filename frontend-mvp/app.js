@@ -70,11 +70,13 @@ const authScreen = document.getElementById("authScreen");
 const dashboardScreen = document.getElementById("dashboardScreen");
 
 function showAuthScreen() {
+  // Exibe tela de autenticação.
   authScreen.classList.add("active");
   dashboardScreen.classList.remove("active");
 }
 
 function showDashboardScreen() {
+  // Exibe painel principal após login.
   authScreen.classList.remove("active");
   dashboardScreen.classList.add("active");
 }
@@ -115,6 +117,7 @@ const logoutTopbarBtn = document.getElementById("logoutTopbarBtn");
 // Renderização principal
 
 function renderOverview() {
+  // Renderiza métricas e diagnóstico.
   metricGrid.innerHTML = "";
   Object.entries(state.machine).forEach(([key, value]) => {
     const card = document.createElement("article");
@@ -135,6 +138,7 @@ function renderOverview() {
 }
 
 function renderRoute() {
+  // Renderiza rota de upgrades.
   routeList.innerHTML = "";
   state.route.forEach((entry) => {
     const li = document.createElement("li");
@@ -145,6 +149,7 @@ function renderRoute() {
 }
 
 function renderCatalog() {
+  // Renderiza catálogo recomendado.
   catalogGrid.innerHTML = "";
   state.catalog.forEach((item) => {
     const card = document.createElement("article");
@@ -159,6 +164,7 @@ function renderCatalog() {
 }
 
 function applyPayload(payload) {
+  // Atualiza estado com dados recebidos.
   if (!payload.machine || !payload.diagnostics || !payload.route || !payload.catalog) {
     throw new Error("Payload incompleto. Esperado: machine, diagnostics, route e catalog.");
   }
@@ -175,21 +181,25 @@ function applyPayload(payload) {
 }
 
 function setMessage(text, type) {
+  // Exibe mensagens do painel.
   scanMessage.textContent = text;
   scanMessage.className = `message ${type}`;
 }
 
 function setSessionInfo(text) {
+  // Exibe resumo da sessão atual.
   sessionInfo.textContent = text;
 }
 
 // Utilitários de sessão
 
 function sanitizeBaseUrl(url) {
+  // Remove barra final da URL.
   return url.replace(/\/+$/, "");
 }
 
 function saveAuthSession(token, username, email, apiBase) {
+  // Salva sessão autenticada localmente.
   localStorage.setItem(STORAGE_KEYS.token, token.trim());
   localStorage.setItem(STORAGE_KEYS.username, username.trim());
   localStorage.setItem(STORAGE_KEYS.email, email.trim());
@@ -197,6 +207,7 @@ function saveAuthSession(token, username, email, apiBase) {
 }
 
 function clearAuthSession() {
+  // Limpa dados de autenticação.
   localStorage.removeItem(STORAGE_KEYS.token);
   localStorage.removeItem(STORAGE_KEYS.username);
   localStorage.removeItem(STORAGE_KEYS.email);
@@ -204,10 +215,12 @@ function clearAuthSession() {
 }
 
 function saveAppState() {
+  // Salva estado atual do app.
   localStorage.setItem(STORAGE_KEYS.appState, JSON.stringify(state));
 }
 
 function loadAppState() {
+  // Carrega estado salvo do app.
   const rawState = localStorage.getItem(STORAGE_KEYS.appState);
 
   if (!rawState) {
@@ -232,26 +245,31 @@ function loadAppState() {
 }
 
 function isNetworkFetchError(error) {
+  // Detecta falhas de rede.
   const message = String(error?.message || "").toLowerCase();
   return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("load failed");
 }
 
 function isUnauthorizedError(error) {
+  // Detecta sessão inválida por 401.
   const message = String(error?.message || "").toLowerCase();
   return message.includes("falha 401") || message.includes("status 401") || message.includes("unauthorized");
 }
 
 function getStoredToken() {
+  // Lê token salvo.
   return localStorage.getItem(STORAGE_KEYS.token);
 }
 
 function getStoredApiBase() {
+  // Lê base da API salva.
   return localStorage.getItem(STORAGE_KEYS.apiBase) || "http://127.0.0.1:8000";
 }
 
 // Mensagens de validação
 
 function clearAuthMessages() {
+  // Limpa mensagens de login/cadastro.
   authApiError.textContent = "";
   authApiError.classList.remove("show");
   authLoginMessage.textContent = "";
@@ -263,6 +281,7 @@ function clearAuthMessages() {
 }
 
 function showAuthError(message, isRegister = false) {
+  // Exibe erro no formulário ativo.
   if (isRegister) {
     authRegError.textContent = message;
     authRegError.classList.add("show");
@@ -273,6 +292,7 @@ function showAuthError(message, isRegister = false) {
 }
 
 function showAuthSuccess(message, isRegister = false) {
+  // Exibe sucesso no formulário ativo.
   if (isRegister) {
     authRegMessage.textContent = message;
     authRegMessage.classList.add("show");
@@ -283,6 +303,7 @@ function showAuthSuccess(message, isRegister = false) {
 }
 
 function getFieldErrorElement(input) {
+  // Garante container de erro por campo.
   let fieldError = input.parentElement.querySelector(".field-error");
 
   if (!fieldError) {
@@ -295,6 +316,7 @@ function getFieldErrorElement(input) {
 }
 
 function setFieldValidationState(input, message, forceShow = false) {
+  // Define estado visual de validação.
   const fieldError = getFieldErrorElement(input);
   const hasValue = input.value.trim().length > 0;
   const touched = input.dataset.touched === "true";
@@ -323,6 +345,7 @@ function setFieldValidationState(input, message, forceShow = false) {
 }
 
 function validateLoginUsername(forceShow = false) {
+  // Valida usuário do login.
   const value = authUsername.value.trim();
   let message = "";
 
@@ -336,6 +359,7 @@ function validateLoginUsername(forceShow = false) {
 }
 
 function validateLoginPassword(forceShow = false) {
+  // Valida senha do login.
   const value = authPassword.value;
   let message = "";
 
@@ -349,6 +373,7 @@ function validateLoginPassword(forceShow = false) {
 }
 
 function validateRegisterUsername(forceShow = false) {
+  // Valida usuário do cadastro.
   const value = regUsername.value.trim();
   let message = "";
 
@@ -362,6 +387,7 @@ function validateRegisterUsername(forceShow = false) {
 }
 
 function validateRegisterEmail(forceShow = false) {
+  // Valida email do cadastro.
   const value = regEmail.value.trim();
   let message = "";
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -376,6 +402,7 @@ function validateRegisterEmail(forceShow = false) {
 }
 
 function validateRegisterPassword(forceShow = false) {
+  // Valida senha do cadastro.
   const value = regPassword.value;
   let message = "";
 
@@ -389,6 +416,7 @@ function validateRegisterPassword(forceShow = false) {
 }
 
 function validateRegisterPasswordConfirm(forceShow = false) {
+  // Confere confirmação de senha.
   const value = regPasswordConfirm.value;
   let message = "";
 
@@ -402,12 +430,14 @@ function validateRegisterPasswordConfirm(forceShow = false) {
 }
 
 function validateLoginForm(forceShow = false) {
+  // Valida formulário de login completo.
   const usernameOk = validateLoginUsername(forceShow);
   const passwordOk = validateLoginPassword(forceShow);
   return usernameOk && passwordOk;
 }
 
 function validateRegisterForm(forceShow = false) {
+  // Valida formulário de cadastro completo.
   const usernameOk = validateRegisterUsername(forceShow);
   const emailOk = validateRegisterEmail(forceShow);
   const passwordOk = validateRegisterPassword(forceShow);
@@ -416,6 +446,7 @@ function validateRegisterForm(forceShow = false) {
 }
 
 function clearFieldValidationStates() {
+  // Reseta estado de validação dos campos.
   [authUsername, authPassword, regUsername, regEmail, regPassword, regPasswordConfirm].forEach((input) => {
     input.classList.remove("is-valid", "is-invalid");
     input.removeAttribute("aria-invalid");
@@ -430,6 +461,7 @@ function clearFieldValidationStates() {
 }
 
 function registerRealtimeValidation(input, validator) {
+  // Liga validação em tempo real.
   input.addEventListener("input", () => {
     validator(false);
     if (input === regPassword) {
@@ -449,6 +481,7 @@ function registerRealtimeValidation(input, validator) {
 // Requisições à API
 
 async function apiRequest(path, token, method = "GET", payload = null) {
+  // Faz requisição HTTP para API.
   const baseUrl = sanitizeBaseUrl(authApiBase.value.trim());
   const headers = {
     "Content-Type": "application/json",
@@ -475,6 +508,7 @@ async function apiRequest(path, token, method = "GET", payload = null) {
 // Fluxo de autenticação
 
 async function handleLogin(event) {
+  // Processa login do usuário.
   event.preventDefault();
   clearAuthMessages();
 
@@ -522,6 +556,7 @@ async function handleLogin(event) {
 }
 
 async function handleRegister(event) {
+  // Processa cadastro do usuário.
   event.preventDefault();
   clearAuthMessages();
 
@@ -572,6 +607,7 @@ async function handleRegister(event) {
 }
 
 function populateDashboardFromSession() {
+  // Preenche painel com sessão salva.
   const token = getStoredToken();
   const username = localStorage.getItem(STORAGE_KEYS.username);
   const email = localStorage.getItem(STORAGE_KEYS.email);
@@ -585,6 +621,7 @@ function populateDashboardFromSession() {
 }
 
 function handleLogout() {
+  // Encerra sessão do usuário.
   clearAuthSession();
   clearAuthMessages();
   clearFieldValidationStates();
@@ -602,6 +639,7 @@ function handleLogout() {
 // Dados do dashboard
 
 async function fetchMachineFromApi() {
+  // Busca dados da máquina no backend.
   const token = authTokenInput.value.trim();
 
   if (!token) {
@@ -659,6 +697,7 @@ async function fetchMachineFromApi() {
 // Abas do dashboard
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
+  // Controla troca de abas do painel.
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
@@ -671,6 +710,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 // Tabs de autenticação
 
 document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
+  // Controla troca entre login e cadastro.
   btn.addEventListener("click", () => {
     clearAuthMessages();
     clearFieldValidationStates();
@@ -687,6 +727,7 @@ document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
 // Eventos principais
 
 registerRealtimeValidation(authUsername, validateLoginUsername);
+// Registra validações em tempo real.
 registerRealtimeValidation(authPassword, validateLoginPassword);
 registerRealtimeValidation(regUsername, validateRegisterUsername);
 registerRealtimeValidation(regEmail, validateRegisterEmail);
@@ -706,6 +747,7 @@ newSessionBtn.addEventListener("click", () => {
 // Inicialização do app
 
 async function initializeApp() {
+  // Inicializa dados e valida sessão.
   const token = getStoredToken();
   const restoredAppState = loadAppState();
 

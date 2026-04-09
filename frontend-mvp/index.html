@@ -13,7 +13,9 @@
     <link rel="stylesheet" href="./styles.css?v=20260407a" />
   </head>
   <body>
+    <!-- Fundo visual da aplicação -->
     <div class="bg-grid"></div>
+    <!-- Tela principal de autenticação -->
     <div id="authScreen" class="auth-screen active">
       <div class="auth-container">
         <div class="auth-header">
@@ -21,11 +23,13 @@
           <p class="auth-subtitle">Planejamento Inteligente de Upgrades</p>
         </div>
 
+        <!-- Abas de login e cadastro -->
         <div class="auth-tabs">
           <button class="auth-tab-btn active" data-tab="login">Entrar</button>
           <button class="auth-tab-btn" data-tab="register">Cadastrar</button>
         </div>
 
+        <!-- Formulário de login -->
         <form id="loginForm" class="auth-form active" data-form="login">
           <div class="form-group">
             <label for="authUsername">Usuário</label>
@@ -42,6 +46,7 @@
           <p id="authLoginMessage" class="auth-message ok"></p>
         </form>
 
+        <!-- Formulário de cadastro -->
         <form id="registerForm" class="auth-form" data-form="register">
           <div class="form-group">
             <label for="regUsername">Usuário</label>
@@ -68,6 +73,7 @@
           <p id="authRegMessage" class="auth-message ok"></p>
         </form>
 
+        <!-- Configuração da API local -->
         <div class="auth-footer">
           <p class="auth-api-config">
             <label for="authApiBase">API Base:</label>
@@ -77,6 +83,7 @@
       </div>
     </div>
 
+    <!-- Dashboard após autenticação -->
     <div id="dashboardScreen" class="dashboard-screen">
       <header class="topbar">
         <div>
@@ -89,6 +96,7 @@
         </div>
       </header>
 
+      <!-- Layout principal do painel -->
       <main class="layout">
       <aside class="side-nav">
         <button class="tab-btn active" data-tab="overview">Visao geral</button>
@@ -97,6 +105,7 @@
         <button class="tab-btn" data-tab="catalog">Catalogo recomendado</button>
       </aside>
 
+      <!-- Aba resumo da máquina -->
       <section class="panel tab-panel active" id="overview">
         <h2>Resumo do computador</h2>
         <p class="subtitle">
@@ -111,6 +120,7 @@
         </div>
       </section>
 
+      <!-- Aba integração com backend -->
       <section class="panel tab-panel" id="scan">
         <h2>Entrada Desktop</h2>
         <p class="subtitle">Faça login uma vez e carregue os dados salvos do usuario no Django.</p>
@@ -143,6 +153,7 @@
         <p id="scanMessage" class="message"></p>
       </section>
 
+      <!-- Aba rota de upgrade -->
       <section class="panel tab-panel" id="route">
         <h2>Arvore de evolucao</h2>
         <p class="subtitle">Ordem sugerida de upgrade para melhor custo-beneficio.</p>
@@ -150,6 +161,7 @@
         <ol id="upgradeRoute" class="route-list"></ol>
       </section>
 
+      <!-- Aba catálogo de recomendações -->
       <section class="panel tab-panel" id="catalog">
         <h2>Componentes recomendados</h2>
         <p class="subtitle">Mock inicial para alinhar layout com o backend.</p>

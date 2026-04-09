@@ -1,0 +1,1 @@
+# Inicializacao do modulo core.
