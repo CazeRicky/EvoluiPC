@@ -3,8 +3,10 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 
+# Testa fluxo principal de autenticacao e sync.
 class AuthAndMachineFlowTests(APITestCase):
     def test_register_login_and_sync_flow(self):
+        # Cadastra usuario e valida token.
         register_response = self.client.post(
             "/api/auth/register",
             {
@@ -17,6 +19,7 @@ class AuthAndMachineFlowTests(APITestCase):
         self.assertEqual(register_response.status_code, 201)
         token = register_response.data["token"]
 
+        # Sincroniza dados da maquina.
         sync_response = self.client.post(
             "/api/machine",
             {
@@ -36,6 +39,7 @@ class AuthAndMachineFlowTests(APITestCase):
         self.assertEqual(sync_response.status_code, 200)
         self.assertEqual(sync_response.data["schema_version"], "1.0")
 
+        # Busca snapshot atual salvo.
         machine_response = self.client.get(
             "/api/machine/me",
             HTTP_AUTHORIZATION=f"Token {token}",
@@ -46,6 +50,7 @@ class AuthAndMachineFlowTests(APITestCase):
         self.assertEqual(machine_response.data["diagnostics"], ["GPU equilibrada para Full HD"])
         self.assertEqual(machine_response.data["route"][0]["step"], "Upgrade 1")
 
+        # Busca rota recomendada.
         route_response = self.client.get(
             "/api/upgrade-route/me",
             HTTP_AUTHORIZATION=f"Token {token}",
@@ -54,6 +59,7 @@ class AuthAndMachineFlowTests(APITestCase):
         self.assertEqual(route_response.data["schema_version"], "1.0")
         self.assertEqual(route_response.data["route"][0]["action"], "Mais RAM")
 
+        # Busca catalogo recomendado.
         catalog_response = self.client.get(
             "/api/recommendations/me",
             HTTP_AUTHORIZATION=f"Token {token}",
@@ -63,6 +69,7 @@ class AuthAndMachineFlowTests(APITestCase):
         self.assertEqual(catalog_response.data["catalog"][0]["name"], "Kit 32GB DDR4")
 
     def test_rejects_unsupported_schema_version(self):
+        # Rejeita schema nao suportado.
         user = User.objects.create_user(username="schema_user", password="12345678")
         token = Token.objects.create(user=user)
 
