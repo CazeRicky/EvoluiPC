@@ -20,6 +20,8 @@ app.add_middleware(
 URI = os.getenv("NEO4J_URI")
 AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 
+maquinas_escaneadas = {}
+
 class LoginData(BaseModel):
     username: str
     password: str
@@ -30,24 +32,52 @@ def login(data: LoginData):
 
 @app.get("/api/auth/me")
 def get_me():
-    return {"user": {"username": "Victor Torres"}}
+    return {"user": {"username": "Victor"}}
+class HardwareUpload(BaseModel):
+    username: str
+    hardware: dict
+
+@app.post("/api/machine/upload")
+def receber_hardware(dados: HardwareUpload):
+
+    maquinas_escaneadas[dados.username] = dados.hardware
+    return {"status": "Hardware recebido com sucesso!"}
 
 @app.get("/api/machine/me")
 def get_machine():
+    usuario_logado = "Victor" 
+    
+    if usuario_logado in maquinas_escaneadas:
+        pc_real = maquinas_escaneadas[usuario_logado]
+        return {
+            "machine": {
+                "cpu": pc_real.get("cpu", "Desconhecido"),
+                "gpu": pc_real.get("gpu", "Desconhecida"),
+                "ram": pc_real.get("ram", "Desconhecida"),
+                "storage": "A Verificar", 
+                "motherboard": pc_real.get("motherboard", "Desconhecida"),
+                "psu": "A Verificar",
+                "bottleneck": "Calculando..."
+            },
+            "diagnostics": [
+                " Hardware real detectado com sucesso pelo Agente EvoluiPC!",
+                f"Sua placa-mãe identificada é a {pc_real.get('motherboard')}.",
+                "O Motor Neo4j está analisando a melhor rota de upgrade para sua configuração."
+            ]
+        }
+        
     return {
         "machine": {
-            "cpu": "Ryzen 5 2600",
-            "gpu": "GTX 1060 6GB",
-            "ram": "16GB DDR4",
-            "storage": "SSD SATA 500GB",
-            "motherboard": "ASUS PRIME A320M-K/BR",
-            "psu": "500W",
-            "bottleneck": "CPU e GPU"
+            "cpu": "Aguardando Scanner...",
+            "gpu": "Aguardando Scanner...",
+            "ram": "Aguardando Scanner...",
+            "storage": "-",
+            "motherboard": "-",
+            "psu": "-",
+            "bottleneck": "-"
         },
         "diagnostics": [
-            "Sua placa-mãe atual (AM4) suporta upgrades poderosos mediante atualização de BIOS.",
-            "O processador e a placa de vídeo antigos podem sofrer quedas de FPS em jogos modernos.",
-            "Recomendamos um upgrade focado na plataforma existente antes de trocar a placa-mãe."
+            "Nenhum hardware detectado. Por favor, rode o Agente EvoluiPC na sua máquina."
         ]
     }
 
@@ -55,7 +85,7 @@ def get_machine():
 def get_route():
     return {
         "route": [
-            {"step": "Passo 1", "action": "Atualizar a BIOS da ASUS PRIME A320M-K/BR", "impact": "Prepara o terreno para a nova geração AM4"},
+            {"step": "Passo 1", "action": "Atualizar a BIOS", "impact": "Prepara o terreno para a nova geração AM4"},
             {"step": "Passo 2", "action": "Instalar o Ryzen 7 5700X3D", "impact": "Salto extremo em FPS e estabilidade de sistema"},
             {"step": "Passo 3", "action": "Adicionar a RTX 4060", "impact": "Gargalo resolvido. Gráficos no Ultra em 1080p."}
         ]
