@@ -1,11 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from neo4j import GraphDatabase
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from datetime import datetime, timezone
+from neo4j_config import NEO4J_DATABASE, get_driver
 
 app = FastAPI(title="EvoluiPC API", description="Motor Inteligente de Hardware")
 
@@ -16,9 +13,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-URI = os.getenv("NEO4J_URI")
-AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 
 class LoginData(BaseModel):
     username: str
@@ -69,19 +63,36 @@ def get_recommendations():
     MATCH (g:PlacaDeVideo) RETURN g.nome AS nome, g.preco AS preco, 'GPU' as tipo
     """
     catalog = []
+    meta = {
+        "provider": "neo4j",
+        "database": NEO4J_DATABASE,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "query": "catalog_v1",
+        "count": 0,
+    }
     
     try:
-        with GraphDatabase.driver(URI, auth=AUTH) as driver:
-            with driver.session() as session:
+        with get_driver() as driver:
+            with driver.session(database=NEO4J_DATABASE) as session:
                 resultado = session.run(query)
                 for reg in resultado:
                     catalog.append({
                         "name": reg["nome"],
                         "price": f"R$ {reg['preco']},00",
                         "source": "Lojas Parceiras",
-                        "tag": f"Upgrade Ideal de {reg['tipo']}"
+                        "tag": f"Upgrade Ideal de {reg['tipo']}",
+                        "origin": "neo4j",
                     })
+        meta["count"] = len(catalog)
     except Exception as e:
-        catalog = [{"name": "Falha na conexão com Neo4j", "price": "-", "source": "Erro", "tag": str(e)}]
+        catalog = [{"name": "Falha na conexão com Neo4j", "price": "-", "source": "Erro", "tag": str(e), "origin": "error"}]
+        meta = {
+            "provider": "engine-error",
+            "database": NEO4J_DATABASE,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "query": "catalog_v1",
+            "count": 0,
+            "error": str(e),
+        }
 
-    return {"catalog": catalog}
+    return {"catalog": catalog, "meta": meta}
