@@ -12,9 +12,21 @@ from .serializers import (
     RegisterSerializer,
 )
 
+# Versoes de schema aceitas pela API.
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
 
 
+def get_user_snapshot(user):
+    # Busca snapshot atual do usuario.
+    return MachineSnapshot.objects.filter(user=user).first()
+
+
+def build_snapshot_response(snapshot):
+    # Retorna resposta padrao de snapshot.
+    return Response(MachineSnapshotSerializer(snapshot).data, status=status.HTTP_200_OK)
+
+
+# Endpoint de cadastro.
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -35,6 +47,7 @@ class RegisterView(APIView):
         )
 
 
+# Endpoint de login.
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -61,6 +74,7 @@ class LoginView(APIView):
         )
 
 
+# Endpoint de dados do usuario autenticado.
 class AuthMeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -75,6 +89,7 @@ class AuthMeView(APIView):
         )
 
 
+# Endpoint de logout por token.
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -84,6 +99,7 @@ class LogoutView(APIView):
         return Response({"detail": "Logout realizado."}, status=status.HTTP_200_OK)
 
 
+# Endpoint de sincronizacao da maquina.
 class MachineSyncView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -114,40 +130,37 @@ class MachineSyncView(APIView):
             },
         )
 
-        return Response(MachineSnapshotSerializer(snapshot).data, status=status.HTTP_200_OK)
+        return build_snapshot_response(snapshot)
 
 
+# Endpoint do snapshot atual.
 class MachineCurrentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = MachineSnapshot.objects.filter(user=request.user).first()
+        snapshot = get_user_snapshot(request.user)
         if not snapshot:
             return Response({"detail": "Nenhum snapshot encontrado para o usuario."}, status=404)
-        return Response(
-            {
-                "schema_version": snapshot.schema_version,
-                "machine": snapshot.machine,
-                "diagnostics": snapshot.diagnostics,
-            }
-        )
+        return build_snapshot_response(snapshot)
 
 
+# Endpoint de rota de upgrade.
 class UpgradeRouteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = MachineSnapshot.objects.filter(user=request.user).first()
+        snapshot = get_user_snapshot(request.user)
         if not snapshot:
             return Response({"route": []}, status=200)
-        return Response({"route": snapshot.route})
+        return Response({"schema_version": snapshot.schema_version, "route": snapshot.route})
 
 
+# Endpoint de recomendacoes.
 class RecommendationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        snapshot = MachineSnapshot.objects.filter(user=request.user).first()
+        snapshot = get_user_snapshot(request.user)
         if not snapshot:
             return Response({"catalog": []}, status=200)
-        return Response({"catalog": snapshot.catalog})
+        return Response({"schema_version": snapshot.schema_version, "catalog": snapshot.catalog})

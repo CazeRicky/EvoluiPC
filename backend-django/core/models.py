@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 
+# Snapshot salvo da maquina do usuario.
 class MachineSnapshot(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     schema_version = models.CharField(max_length=10, default="1.0")
@@ -13,4 +14,5 @@ class MachineSnapshot(models.Model):
     source = models.CharField(max_length=50, default="desktop-agent")
 
     def __str__(self):
+        # Exibe usuario no admin.
         return f"Snapshot<{self.user.username}>"

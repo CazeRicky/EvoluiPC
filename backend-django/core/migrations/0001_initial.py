@@ -3,6 +3,7 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+# Migração inicial das tabelas core.
 class Migration(migrations.Migration):
     initial = True
 
@@ -11,6 +12,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Cria tabela de snapshots.
         migrations.CreateModel(
             name="MachineSnapshot",
             fields=[
