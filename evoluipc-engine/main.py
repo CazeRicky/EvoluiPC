@@ -1,16 +1,4 @@
-import os
-from dotenv import load_dotenv
-from neo4j import GraphDatabase
-
-# Carrega as variáveis de segurança do arquivo .env
-load_dotenv()
-
-# Puxa as credenciais sem expor no código
-URI = os.getenv("NEO4J_URI")
-USER = os.getenv("NEO4J_USER")
-PASSWORD = os.getenv("NEO4J_PASSWORD")
-
-AUTH = (USER, PASSWORD)
+from neo4j_config import NEO4J_DATABASE, get_driver
 
 def criar_setup_inicial(driver):
     query = """
@@ -28,12 +16,12 @@ def criar_setup_inicial(driver):
     RETURN cpu.nome, type(rel), mobo.nome
     """
     
-    with driver.session() as session:
+    with driver.session(database=NEO4J_DATABASE) as session:
         resultado = session.run(query)
         for registro in resultado:
             print(f"Sucesso! Criado: {registro['cpu.nome']} -> {registro['type(rel)']} -> {registro['mobo.nome']}")
 
 if __name__ == "__main__":
-    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+    with get_driver() as driver:
         print("Conectando ao EvoluiPC Engine...")
         criar_setup_inicial(driver)

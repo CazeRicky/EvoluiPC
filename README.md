@@ -46,6 +46,10 @@ Organização sistêmica do projeto seguindo a ordem lógica de desenvolvimento 
 * **Banco de Dados:** Neo4j (Knowledge Graph)
 * **Automação:** Web Scraping (Selenium/BeautifulSoup)
 
+## ▶️ Motor Neo4j
+* O arquivo `.env` deve ficar em [`evoluipc-engine/.env`](evoluipc-engine/.env.example), usando o banco `EvoluiPC` no Neo4j Desktop.
+* O motor lê `NEO4J_DATABASE=EvoluiPC` por padrão; ajuste apenas a URI, o usuário e a senha do seu Neo4j local.
+
 ---
 
 ## 👨‍💻 Autor

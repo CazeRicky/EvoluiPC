@@ -1,11 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from neo4j import GraphDatabase
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from datetime import datetime, timezone
+from neo4j_config import NEO4J_DATABASE, get_driver # Estrutura nova do Docker
 
 app = FastAPI(title="EvoluiPC API", description="Motor Inteligente de Hardware")
 
@@ -17,9 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-URI = os.getenv("NEO4J_URI")
-AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
-
+# Mantendo o seu banco de memória para o Scanner
 maquinas_escaneadas = {}
 
 class LoginData(BaseModel):
@@ -33,13 +28,14 @@ def login(data: LoginData):
 @app.get("/api/auth/me")
 def get_me():
     return {"user": {"username": "Victor"}}
+
+# Rota do seu Scanner Local
 class HardwareUpload(BaseModel):
     username: str
     hardware: dict
 
 @app.post("/api/machine/upload")
 def receber_hardware(dados: HardwareUpload):
-
     maquinas_escaneadas[dados.username] = dados.hardware
     return {"status": "Hardware recebido com sucesso!"}
 
@@ -47,6 +43,7 @@ def receber_hardware(dados: HardwareUpload):
 def get_machine():
     usuario_logado = "Victor" 
     
+    # Lógica que integra o seu Scanner com a resposta da API
     if usuario_logado in maquinas_escaneadas:
         pc_real = maquinas_escaneadas[usuario_logado]
         return {
@@ -60,7 +57,7 @@ def get_machine():
                 "bottleneck": "Calculando..."
             },
             "diagnostics": [
-                " Hardware real detectado com sucesso pelo Agente EvoluiPC!",
+                "✅ Hardware real detectado com sucesso pelo Agente EvoluiPC!",
                 f"Sua placa-mãe identificada é a {pc_real.get('motherboard')}.",
                 "O Motor Neo4j está analisando a melhor rota de upgrade para sua configuração."
             ]
@@ -77,7 +74,7 @@ def get_machine():
             "bottleneck": "-"
         },
         "diagnostics": [
-            "Nenhum hardware detectado. Por favor, rode o Agente EvoluiPC na sua máquina."
+            "⚠️ Nenhum hardware detectado. Por favor, rode o Agente EvoluiPC na sua máquina."
         ]
     }
 
@@ -99,19 +96,37 @@ def get_recommendations():
     MATCH (g:PlacaDeVideo) RETURN g.nome AS nome, g.preco AS preco, 'GPU' as tipo
     """
     catalog = []
+    meta = {
+        "provider": "neo4j",
+        "database": NEO4J_DATABASE,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "query": "catalog_v1",
+        "count": 0,
+    }
     
     try:
-        with GraphDatabase.driver(URI, auth=AUTH) as driver:
-            with driver.session() as session:
+        # Usando a conexão nova via Driver do Docker
+        with get_driver() as driver:
+            with driver.session(database=NEO4J_DATABASE) as session:
                 resultado = session.run(query)
                 for reg in resultado:
                     catalog.append({
                         "name": reg["nome"],
                         "price": f"R$ {reg['preco']},00",
                         "source": "Lojas Parceiras",
-                        "tag": f"Upgrade Ideal de {reg['tipo']}"
+                        "tag": f"Upgrade Ideal de {reg['tipo']}",
+                        "origin": "neo4j",
                     })
+        meta["count"] = len(catalog)
     except Exception as e:
-        catalog = [{"name": "Falha na conexão com Neo4j", "price": "-", "source": "Erro", "tag": str(e)}]
+        catalog = [{"name": "Falha na conexão com Neo4j", "price": "-", "source": "Erro", "tag": str(e), "origin": "error"}]
+        meta = {
+            "provider": "engine-error",
+            "database": NEO4J_DATABASE,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "query": "catalog_v1",
+            "count": 0,
+            "error": str(e),
+        }
 
-    return {"catalog": catalog}
+    return {"catalog": catalog, "meta": meta}

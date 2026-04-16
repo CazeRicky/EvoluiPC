@@ -4,6 +4,7 @@ from rest_framework import serializers
 from .models import MachineSnapshot
 
 
+# Serializa cadastro de usuario.
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
 
@@ -12,6 +13,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ["username", "email", "password"]
 
     def create(self, validated_data):
+        # Cria usuario com hash de senha.
         return User.objects.create_user(
             username=validated_data["username"],
             email=validated_data.get("email", ""),
@@ -19,11 +21,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
 
+# Serializa credenciais de login.
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
 
+# Serializa payload vindo do desktop.
 class MachineSyncSerializer(serializers.Serializer):
     schema_version = serializers.CharField(required=False, default="1.0", max_length=10)
     machine = serializers.DictField()
@@ -33,6 +37,7 @@ class MachineSyncSerializer(serializers.Serializer):
     source = serializers.CharField(required=False, max_length=50)
 
 
+# Serializa snapshot completo para resposta.
 class MachineSnapshotSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
 
