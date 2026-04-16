@@ -56,6 +56,7 @@ const initialState = {
 
 const STORAGE_KEYS = {
   apiBase: "evoluipc.apiBase",
+  engineApiBase: "evoluipc.engineApiBase",
   token: "evoluipc.token",
   email: "evoluipc.email",
   username: "evoluipc.username",
@@ -63,6 +64,12 @@ const STORAGE_KEYS = {
 };
 
 const state = structuredClone(initialState);
+let catalogMeta = {
+  provider: "local",
+  database: "n/a",
+  fetched_at: "",
+  count: state.catalog.length,
+};
 
 // Alterna entre login e dashboard
 
@@ -103,7 +110,9 @@ const metricGrid = document.getElementById("metricGrid");
 const diagnosticList = document.getElementById("diagnosticList");
 const routeList = document.getElementById("upgradeRoute");
 const catalogGrid = document.getElementById("catalogGrid");
+const catalogSourceInfo = document.getElementById("catalogSourceInfo");
 const apiBaseInput = document.getElementById("apiBaseInput");
+const engineApiBaseInput = document.getElementById("engineApiBaseInput");
 const emailInput = document.getElementById("emailInput");
 const usernameInput = document.getElementById("usernameInput");
 const passwordInput = document.getElementById("passwordInput");
@@ -154,7 +163,10 @@ function renderCatalog() {
   state.catalog.forEach((item) => {
     const card = document.createElement("article");
     card.className = "catalog-card";
+    const originLabel = item.origin === "neo4j" ? "Neo4j" : "Fallback";
+    const originClass = item.origin === "neo4j" ? "catalog-badge neo4j" : "catalog-badge fallback";
     card.innerHTML = `
+      <span class="${originClass}">${originLabel}</span>
       <h3>${item.name}</h3>
       <p>${item.tag}</p>
       <p class="catalog-meta">${item.price} · ${item.source}</p>
@@ -191,6 +203,41 @@ function setSessionInfo(text) {
   sessionInfo.textContent = text;
 }
 
+function setCatalogSourceInfo(text, status = "") {
+  // Informa a origem atual do catálogo.
+  if (!catalogSourceInfo) {
+    return;
+  }
+
+  catalogSourceInfo.textContent = text;
+  catalogSourceInfo.classList.remove("source-info-ok", "source-info-error");
+
+  if (status === "ok") {
+    catalogSourceInfo.classList.add("source-info-ok");
+  }
+
+  if (status === "error") {
+    catalogSourceInfo.classList.add("source-info-error");
+  }
+}
+
+async function fetchCatalogFromEngine(engineBase) {
+  // Busca catálogo direto do Engine Neo4j.
+  const response = await fetch(`${engineBase}/api/recommendations/me`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Engine falhou ${response.status}. ${errorBody}`);
+  }
+
+  return response.json();
+}
+
 // Utilitários de sessão
 
 function sanitizeBaseUrl(url) {
@@ -204,6 +251,10 @@ function saveAuthSession(token, username, email, apiBase) {
   localStorage.setItem(STORAGE_KEYS.username, username.trim());
   localStorage.setItem(STORAGE_KEYS.email, email.trim());
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
+
+  if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
+    localStorage.setItem(STORAGE_KEYS.engineApiBase, "http://127.0.0.1:8002");
+  }
 }
 
 function clearAuthSession() {
@@ -212,6 +263,12 @@ function clearAuthSession() {
   localStorage.removeItem(STORAGE_KEYS.username);
   localStorage.removeItem(STORAGE_KEYS.email);
   localStorage.removeItem(STORAGE_KEYS.apiBase);
+}
+
+function saveApiBases(djangoBase, engineBase) {
+  // Salva bases de API usadas no painel.
+  localStorage.setItem(STORAGE_KEYS.apiBase, djangoBase.trim());
+  localStorage.setItem(STORAGE_KEYS.engineApiBase, engineBase.trim());
 }
 
 function saveAppState() {
@@ -264,6 +321,11 @@ function getStoredToken() {
 function getStoredApiBase() {
   // Lê base da API salva.
   return localStorage.getItem(STORAGE_KEYS.apiBase) || "http://127.0.0.1:8000";
+}
+
+function getStoredEngineApiBase() {
+  // Lê base do engine salva.
+  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "http://127.0.0.1:8002";
 }
 
 // Mensagens de validação
@@ -480,9 +542,9 @@ function registerRealtimeValidation(input, validator) {
 
 // Requisições à API
 
-async function apiRequest(path, token, method = "GET", payload = null) {
+async function apiRequest(path, token, method = "GET", payload = null, baseUrlOverride = null) {
   // Faz requisição HTTP para API.
-  const baseUrl = sanitizeBaseUrl(authApiBase.value.trim());
+  const baseUrl = sanitizeBaseUrl((baseUrlOverride || authApiBase.value || "").trim());
   const headers = {
     "Content-Type": "application/json",
   };
@@ -613,6 +675,7 @@ function populateDashboardFromSession() {
   const email = localStorage.getItem(STORAGE_KEYS.email);
 
   apiBaseInput.value = getStoredApiBase();
+  engineApiBaseInput.value = getStoredEngineApiBase();
   usernameInput.value = username;
   emailInput.value = email;
   authTokenInput.value = token;
@@ -641,21 +704,53 @@ function handleLogout() {
 async function fetchMachineFromApi() {
   // Busca dados da máquina no backend.
   const token = authTokenInput.value.trim();
+  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
+  const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
 
   if (!token) {
     setMessage("Informe o token de autenticação.", "error");
     return;
   }
 
+  saveApiBases(djangoBase, engineBase);
+
   fetchMachineBtn.disabled = true;
-  setMessage("Buscando dados no backend Django...", "ok");
+  setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
 
   try {
-    const [machineData, routeData, recommendationData] = await Promise.all([
-      apiRequest("/api/machine/me", token),
-      apiRequest("/api/upgrade-route/me", token),
-      apiRequest("/api/recommendations/me", token),
+    const [machineData, routeData] = await Promise.all([
+      apiRequest("/api/machine/me", token, "GET", null, djangoBase),
+      apiRequest("/api/upgrade-route/me", token, "GET", null, djangoBase),
     ]);
+
+    let recommendationData;
+    let catalogSource = "Engine Neo4j";
+
+    try {
+      recommendationData = await fetchCatalogFromEngine(engineBase);
+      catalogMeta = recommendationData.meta || {
+        provider: "neo4j",
+        database: "desconhecido",
+        fetched_at: "",
+        count: (recommendationData.catalog || []).length,
+      };
+      setCatalogSourceInfo(
+        `Origem: Neo4j | DB: ${catalogMeta.database} | itens: ${catalogMeta.count}`,
+        "ok"
+      );
+    } catch (engineError) {
+      recommendationData = await apiRequest("/api/recommendations/me", token, "GET", null, djangoBase);
+      catalogSource = "Django (fallback)";
+      const fallbackCatalog = recommendationData.catalog || recommendationData;
+      fallbackCatalog.forEach((item) => {
+        item.origin = "fallback";
+      });
+      recommendationData = { catalog: fallbackCatalog };
+      setCatalogSourceInfo(
+        `Origem do catálogo: Django (fallback do Engine). Motivo: ${engineError.message}`,
+        "error"
+      );
+    }
 
     const payload = {
       machine: machineData.machine || machineData,
@@ -665,7 +760,7 @@ async function fetchMachineFromApi() {
     };
 
     applyPayload(payload);
-    setMessage("Dados carregados com sucesso.", "ok");
+    setMessage(`Dados carregados com sucesso. Catalogo via ${catalogSource}.`, "ok");
   } catch (error) {
     if (isUnauthorizedError(error)) {
       clearAuthSession();
@@ -678,12 +773,14 @@ async function fetchMachineFromApi() {
       renderOverview();
       renderRoute();
       renderCatalog();
+      setCatalogSourceInfo("Origem do catálogo: armazenamento local (sem conexão).", "error");
       setMessage("Backend indisponível. Dados carregados do armazenamento local.", "ok");
       return;
     }
 
     if (isNetworkFetchError(error)) {
       saveAppState();
+      setCatalogSourceInfo("Origem do catálogo: armazenamento local (sem conexão).", "error");
       setMessage("Backend indisponível. Dados padrão salvos no navegador.", "ok");
       return;
     }
@@ -691,6 +788,31 @@ async function fetchMachineFromApi() {
     setMessage(error.message || "Erro ao consultar API.", "error");
   } finally {
     fetchMachineBtn.disabled = false;
+  }
+}
+
+async function syncCatalogFromEngineOnLoad() {
+  // Sincroniza catálogo do Engine sem depender do login.
+  const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
+  setCatalogSourceInfo(`Sincronizando catálogo com ${engineBase}...`, "");
+
+  try {
+    const recommendationData = await fetchCatalogFromEngine(engineBase);
+    state.catalog = recommendationData.catalog || recommendationData;
+    catalogMeta = recommendationData.meta || {
+      provider: "neo4j",
+      database: "desconhecido",
+      fetched_at: "",
+      count: (recommendationData.catalog || []).length,
+    };
+    renderCatalog();
+    saveAppState();
+    setCatalogSourceInfo(
+      `Origem: Neo4j | DB: ${catalogMeta.database} | itens: ${catalogMeta.count}`,
+      "ok"
+    );
+  } catch (error) {
+    setCatalogSourceInfo(`Origem do catálogo: local (Engine indisponível). Motivo: ${error.message}`, "error");
   }
 }
 
@@ -751,9 +873,15 @@ async function initializeApp() {
   const token = getStoredToken();
   const restoredAppState = loadAppState();
 
+  authApiBase.value = getStoredApiBase();
+  engineApiBaseInput.value = getStoredEngineApiBase();
+
   renderOverview();
   renderRoute();
   renderCatalog();
+  setCatalogSourceInfo("Origem do catálogo: local (ainda não sincronizado).", "");
+
+  await syncCatalogFromEngineOnLoad();
 
   if (!restoredAppState) {
     saveAppState();

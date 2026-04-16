@@ -75,6 +75,16 @@ h2 {
   margin: 14px 0 8px;
 }
 
+.source-info-ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.source-info-error {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .ghost-btn,
 .tab-btn,
 button {
@@ -267,6 +277,29 @@ input {
   border-radius: 14px;
   padding: 12px;
   background: #fff;
+}
+
+.catalog-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.catalog-badge.neo4j {
+  background: #e8f6ea;
+  color: #1f6c3d;
+  border: 1px solid #9ed3ac;
+}
+
+.catalog-badge.fallback {
+  background: #fff1ef;
+  color: #a9432f;
+  border: 1px solid #e7b0a5;
 }
 
 .catalog-card h3 {
