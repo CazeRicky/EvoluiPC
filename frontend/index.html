@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260407a" />
+    <link rel="stylesheet" href="./styles.css?v=20260415a" />
   </head>
   <body>
     <!-- Fundo visual da aplicação -->
@@ -129,6 +129,9 @@
           <label for="apiBaseInput">Base da API</label>
           <input id="apiBaseInput" type="text" value="http://127.0.0.1:8000" />
 
+          <label for="engineApiBaseInput">Base do Engine (Neo4j)</label>
+          <input id="engineApiBaseInput" type="text" value="http://127.0.0.1:8002" />
+
           <label for="emailInput">Email</label>
           <input id="emailInput" type="email" placeholder="Seu email (opcional no login)" />
 
@@ -164,13 +167,14 @@
       <!-- Aba catálogo de recomendações -->
       <section class="panel tab-panel" id="catalog">
         <h2>Componentes recomendados</h2>
-        <p class="subtitle">Mock inicial para alinhar layout com o backend.</p>
+        <p class="subtitle">Dados vindos do Engine Neo4j com fallback local.</p>
+        <p id="catalogSourceInfo" class="subtitle compact">Origem do catálogo: local (ainda não sincronizado).</p>
 
         <div id="catalogGrid" class="catalog-grid"></div>
       </section>
       </main>
     </div>
 
-    <script src="./app.js?v=20260407a"></script>
+    <script src="./app.js?v=20260415a"></script>
   </body>
 </html>
