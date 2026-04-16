@@ -1,0 +1,12 @@
+{"appId": "com.evoluipc.app",
+  "appName": "EvoluiPC",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 3000,
+      "launchAutoHide": true,
+      "backgroundColor": "#f3efe6"
+    }
+  }
+}

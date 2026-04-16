@@ -1,0 +1,27 @@
+# Vite
+dist/
+.vite/
+
+# Capacitor
+android/
+ios/
+/.capacitor/
+
+# Node
+node_modules/
+npm-debug.log
+yarn.lock
+
+# Environment
+.env.local
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
