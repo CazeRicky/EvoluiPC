@@ -53,7 +53,7 @@ Organização sistêmica do projeto seguindo a ordem lógica de desenvolvimento 
 ---
 
 ## 👨‍💻 Autor
-* **Carlos Henrique** *Estudante de Engenharia de Computação - UFRPE*
-* **David Alenor** *Estudante de Engenharia de Computação - UFRPE*
-* **Victor Felipe** *Estudante de Engenharia de Computação - UFRPE*
+* **Carlos Henrique** *Estudante de Engenharia da Computação - UFRPE*
+* **David Alenor** *Estudante de Engenharia da Computação - UFRPE*
+* **Victor Felipe** *Estudante de Engenharia da Computação - UFRPE*
   
