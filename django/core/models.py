@@ -1,10 +1,9 @@
-from django.conf import settings
 from django.db import models
 
 
 # Snapshot salvo da maquina do usuario.
 class MachineSnapshot(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user_id = models.PositiveIntegerField(unique=True)
     schema_version = models.CharField(max_length=10, default="1.0")
     machine = models.JSONField(default=dict)
     diagnostics = models.JSONField(default=list)
@@ -14,5 +13,5 @@ class MachineSnapshot(models.Model):
     source = models.CharField(max_length=50, default="desktop-agent")
 
     def __str__(self):
-        # Exibe usuario no admin.
-        return f"Snapshot<{self.user.username}>"
+        # Exibe o identificador do usuario no admin.
+        return f"Snapshot<{self.user_id}>"
