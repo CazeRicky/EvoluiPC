@@ -95,6 +95,9 @@ const scanMessage = document.getElementById("scanMessage");
 const fetchMachineBtn = document.getElementById("fetchMachineBtn");
 const newSessionBtn = document.getElementById("newSessionBtn");
 const logoutTopbarBtn = document.getElementById("logoutTopbarBtn");
+const registerBtn = document.getElementById("registerBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
 
 // Renderização principal
 
@@ -102,6 +105,9 @@ function renderOverview() {
   // Renderiza métricas e diagnóstico.
   metricGrid.innerHTML = "";
   Object.entries(state.machine).forEach(([key, value]) => {
+    if (key === "cpu_tier" || key === "gpu_tier") {
+      return;
+    }
     const card = document.createElement("article");
     card.className = "metric-card";
     card.innerHTML = `
@@ -710,6 +716,114 @@ function handleLogout() {
   setSessionInfo("Sessão encerrada.");
 }
 
+async function handleDashboardLogin() {
+  // Login direto pela aba Entrada Desktop para trocar de usuário rapidamente.
+  const username = (usernameInput.value || "").trim();
+  const password = passwordInput.value || "";
+  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
+
+  if (!username || !password) {
+    setMessage("Informe usuario e senha para entrar.", "error");
+    return;
+  }
+
+  loginBtn.disabled = true;
+  setMessage("Autenticando usuario...", "ok");
+
+  try {
+    const loginData = await apiRequest(
+      "/api/auth/login",
+      null,
+      "POST",
+      {
+        username,
+        password,
+      },
+      djangoBase
+    );
+
+    saveAuthSession(loginData.token, loginData.user.username, loginData.user.email || "", djangoBase);
+    populateDashboardFromSession();
+    resetDashboardToNaState();
+    await fetchMachineFromApi();
+    setMessage(`Sessao atualizada para ${loginData.user.username}.`, "ok");
+  } catch (error) {
+    setMessage(error.message || "Falha no login pela Entrada Desktop.", "error");
+  } finally {
+    loginBtn.disabled = false;
+  }
+}
+
+async function handleDashboardRegister() {
+  // Cadastro direto pela aba Entrada Desktop.
+  const username = (usernameInput.value || "").trim();
+  const email = (emailInput.value || "").trim();
+  const password = passwordInput.value || "";
+  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
+
+  if (!username || !password) {
+    setMessage("Informe usuario e senha para cadastrar.", "error");
+    return;
+  }
+
+  registerBtn.disabled = true;
+  setMessage("Criando conta...", "ok");
+
+  try {
+    const registerData = await apiRequest(
+      "/api/auth/register",
+      null,
+      "POST",
+      {
+        username,
+        email,
+        password,
+      },
+      djangoBase
+    );
+
+    saveAuthSession(registerData.token, registerData.user.username, registerData.user.email || "", djangoBase);
+    populateDashboardFromSession();
+    resetDashboardToNaState();
+    await fetchMachineFromApi();
+    setMessage(`Conta criada e autenticada como ${registerData.user.username}.`, "ok");
+  } catch (error) {
+    setMessage(error.message || "Falha no cadastro pela Entrada Desktop.", "error");
+  } finally {
+    registerBtn.disabled = false;
+  }
+}
+
+async function handleDashboardLogout() {
+  // Logout pela aba Entrada Desktop sem sair para a tela de autenticação.
+  const token = (authTokenInput.value || "").trim() || getStoredToken();
+  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
+
+  logoutBtn.disabled = true;
+  try {
+    if (token) {
+      await apiRequest("/api/auth/logout", token, "POST", null, djangoBase);
+    }
+  } catch {
+    // Se o token ja expirou, seguimos limpando a sessao local.
+  } finally {
+    localStorage.removeItem(getAppStateStorageKey());
+    clearAuthSession();
+    authTokenInput.value = "";
+    passwordInput.value = "";
+    state.machine = structuredClone(DEFAULT_MACHINE_STATE);
+    state.diagnostics = structuredClone(DEFAULT_DIAGNOSTICS);
+    state.route = structuredClone(DEFAULT_ROUTE);
+    state.catalog = [];
+    renderOverview();
+    renderRoute();
+    renderCatalog();
+    setSessionInfo("Sem sessao ativa.");
+    setMessage("Sessao encerrada na Entrada Desktop.", "ok");
+    logoutBtn.disabled = false;
+  }
+}
+
 // Dados do dashboard
 
 async function fetchMachineFromApi() {
@@ -871,6 +985,15 @@ loginForm.addEventListener("submit", handleLogin);
 registerForm.addEventListener("submit", handleRegister);
 fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
 logoutTopbarBtn.addEventListener("click", handleLogout);
+if (loginBtn) {
+  loginBtn.addEventListener("click", handleDashboardLogin);
+}
+if (registerBtn) {
+  registerBtn.addEventListener("click", handleDashboardRegister);
+}
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", handleDashboardLogout);
+}
 newSessionBtn.addEventListener("click", () => {
   applyPayload(structuredClone(initialState));
   saveAppState();
