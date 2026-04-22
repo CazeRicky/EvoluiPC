@@ -56,7 +56,7 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-12345678}
       NEO4J_DATABASE: neo4j
-    command: sh -c "python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python manage.py seed_demo_users && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     healthcheck:

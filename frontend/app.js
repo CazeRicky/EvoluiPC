@@ -104,6 +104,12 @@ const logoutBtn = document.getElementById("logoutBtn");
 function renderOverview() {
   // Renderiza métricas e diagnóstico.
   metricGrid.innerHTML = "";
+  const metricLabels = {
+    motherboard: "PLACA-MAE",
+    ram_type: "TIPO RAM",
+    storage: "ARMZENAMENTO",
+  };
+
   Object.entries(state.machine).forEach(([key, value]) => {
     if (key === "cpu_tier" || key === "gpu_tier") {
       return;
@@ -111,7 +117,7 @@ function renderOverview() {
     const card = document.createElement("article");
     card.className = "metric-card";
     card.innerHTML = `
-      <p class="metric-label">${key.toUpperCase()}</p>
+      <p class="metric-label">${(metricLabels[key] || key.toUpperCase())}</p>
       <p class="metric-value">${value}</p>
     `;
     metricGrid.appendChild(card);
