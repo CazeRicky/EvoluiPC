@@ -1,8 +1,9 @@
+import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timezone
-from neo4j_config import NEO4J_DATABASE, get_driver # Estrutura nova do Docker
+from neo4j_config import NEO4J_DATABASE, get_driver
 
 app = FastAPI(title="EvoluiPC API", description="Motor Inteligente de Hardware")
 
@@ -14,77 +15,103 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mantendo o seu banco de memória para o Scanner
-maquinas_escaneadas = {}
-
 class LoginData(BaseModel):
     username: str
     password: str
+
+class HardwareUpload(BaseModel):
+    username: str
+    hardware: dict
 
 @app.post("/api/auth/login")
 def login(data: LoginData):
     return {"token": "token-evoluipc-123", "user": {"username": data.username}}
 
 @app.get("/api/auth/me")
-def get_me():
-    return {"user": {"username": "Victor"}}
-
-# Rota do seu Scanner Local
-class HardwareUpload(BaseModel):
-    username: str
-    hardware: dict
+def get_me(username: str = "Visitante"):
+    return {"user": {"username": username}}
 
 @app.post("/api/machine/upload")
 def receber_hardware(dados: HardwareUpload):
-    maquinas_escaneadas[dados.username] = dados.hardware
-    return {"status": "Hardware recebido com sucesso!"}
+    machine_data = {
+        "cpu": dados.hardware.get("cpu", "Desconhecido"),
+        "gpu": dados.hardware.get("gpu", "Desconhecida"),
+        "motherboard": dados.hardware.get("motherboard", "Desconhecida"),
+        "ram": dados.hardware.get("ram", "Desconhecida"),
+        "socket": "Detectado",
+        "ram_type": "DDR4/DDR5",
+        "storage": "Detectado pelo Agente"
+    }
+    
+    diagnostics = [
+        f"✅ Sincronizado com o Agente EvoluiPC!",
+        f"Hardware real de {dados.username} detectado com sucesso.",
+        f"Placa-mãe: {machine_data['motherboard']}."
+    ]
+    
+    query = """
+    MATCH (u:AppUser {username: $username})
+    MERGE (u)-[:HAS_PC_PARTS]->(p:UserPcParts)
+    SET p.machine_json = $machine_json,
+        p.diagnostics_json = $diagnostics_json,
+        p.source = 'Scanner_Local_Exe',
+        p.updated_at = $now
+    RETURN p
+    """
+    
+    try:
+        with get_driver() as driver:
+            with driver.session(database=NEO4J_DATABASE) as session:
+                resultado = session.run(
+                    query,
+                    username=dados.username,
+                    machine_json=json.dumps(machine_data, ensure_ascii=False),
+                    diagnostics_json=json.dumps(diagnostics, ensure_ascii=False),
+                    now=datetime.now(timezone.utc).isoformat()
+                )
+                
+                if resultado.single():
+                    return {"status": "Hardware real gravado com sucesso no formato do site!"}
+                else:
+                    return {"status": f"Erro: Usuário '{dados.username}' não encontrado no Neo4j."}
+    except Exception as e:
+        return {"status": f"Falha na conexão: {str(e)}"}
 
 @app.get("/api/machine/me")
-def get_machine():
-    usuario_logado = "Victor" 
+def get_machine(username: str = "Visitante"):
+    query = """
+    MATCH (u:AppUser {username: $username})-[:HAS_PC_PARTS]->(p:UserPcParts)
+    RETURN p.machine_json AS machine_json, p.diagnostics_json AS diagnostics_json
+    """
     
-    # Lógica que integra o seu Scanner com a resposta da API
-    if usuario_logado in maquinas_escaneadas:
-        pc_real = maquinas_escaneadas[usuario_logado]
-        return {
-            "machine": {
-                "cpu": pc_real.get("cpu", "Desconhecido"),
-                "gpu": pc_real.get("gpu", "Desconhecida"),
-                "ram": pc_real.get("ram", "Desconhecida"),
-                "storage": "A Verificar", 
-                "motherboard": pc_real.get("motherboard", "Desconhecida"),
-                "psu": "A Verificar",
-                "bottleneck": "Calculando..."
-            },
-            "diagnostics": [
-                "✅ Hardware real detectado com sucesso pelo Agente EvoluiPC!",
-                f"Sua placa-mãe identificada é a {pc_real.get('motherboard')}.",
-                "O Motor Neo4j está analisando a melhor rota de upgrade para sua configuração."
-            ]
-        }
+    try:
+        with get_driver() as driver:
+            with driver.session(database=NEO4J_DATABASE) as session:
+                record = session.run(query, username=username).single()
+                
+                if record:
+                    m_json = record["machine_json"]
+                    d_json = record["diagnostics_json"]
+                    
+                    return {
+                        "machine": json.loads(m_json) if isinstance(m_json, str) else m_json,
+                        "diagnostics": json.loads(d_json) if isinstance(d_json, str) else d_json
+                    }
+    except Exception:
+        pass 
         
     return {
-        "machine": {
-            "cpu": "Aguardando Scanner...",
-            "gpu": "Aguardando Scanner...",
-            "ram": "Aguardando Scanner...",
-            "storage": "-",
-            "motherboard": "-",
-            "psu": "-",
-            "bottleneck": "-"
-        },
-        "diagnostics": [
-            "⚠️ Nenhum hardware detectado. Por favor, rode o Agente EvoluiPC na sua máquina."
-        ]
+        "machine": {"cpu": "Aguardando Scanner...", "gpu": "Aguardando Scanner..."},
+        "diagnostics": [f"Nenhum hardware real encontrado para {username}."]
     }
 
 @app.get("/api/upgrade-route/me")
-def get_route():
+def get_route(username: str = "Visitante"):
     return {
         "route": [
-            {"step": "Passo 1", "action": "Atualizar a BIOS", "impact": "Prepara o terreno para a nova geração AM4"},
-            {"step": "Passo 2", "action": "Instalar o Ryzen 7 5700X3D", "impact": "Salto extremo em FPS e estabilidade de sistema"},
-            {"step": "Passo 3", "action": "Adicionar a RTX 4060", "impact": "Gargalo resolvido. Gráficos no Ultra em 1080p."}
+            {"step": "Passo 1", "action": "Atualizar a BIOS", "impact": "Estabilidade"},
+            {"step": "Passo 2", "action": "Instalar Ryzen 5000", "impact": "Ganho de Performance"},
+            {"step": "Passo 3", "action": "Nova GPU", "impact": "Fim do Gargalo"}
         ]
     }
 
@@ -96,37 +123,13 @@ def get_recommendations():
     MATCH (g:PlacaDeVideo) RETURN g.nome AS nome, g.preco AS preco, 'GPU' as tipo
     """
     catalog = []
-    meta = {
-        "provider": "neo4j",
-        "database": NEO4J_DATABASE,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-        "query": "catalog_v1",
-        "count": 0,
-    }
-    
     try:
-        # Usando a conexão nova via Driver do Docker
         with get_driver() as driver:
             with driver.session(database=NEO4J_DATABASE) as session:
-                resultado = session.run(query)
-                for reg in resultado:
+                for reg in session.run(query):
                     catalog.append({
-                        "name": reg["nome"],
-                        "price": f"R$ {reg['preco']},00",
-                        "source": "Lojas Parceiras",
-                        "tag": f"Upgrade Ideal de {reg['tipo']}",
-                        "origin": "neo4j",
+                        "name": reg["nome"], "price": f"R$ {reg['preco']},00", "source": "Lojas", "tag": f"Upgrade {reg['tipo']}", "origin": "neo4j"
                     })
-        meta["count"] = len(catalog)
-    except Exception as e:
-        catalog = [{"name": "Falha na conexão com Neo4j", "price": "-", "source": "Erro", "tag": str(e), "origin": "error"}]
-        meta = {
-            "provider": "engine-error",
-            "database": NEO4J_DATABASE,
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
-            "query": "catalog_v1",
-            "count": 0,
-            "error": str(e),
-        }
-
-    return {"catalog": catalog, "meta": meta}
+    except Exception:
+        pass
+    return {"catalog": catalog}
