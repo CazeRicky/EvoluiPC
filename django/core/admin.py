@@ -6,5 +6,5 @@ from .models import MachineSnapshot
 # Configura listagem no admin Django.
 @admin.register(MachineSnapshot)
 class MachineSnapshotAdmin(admin.ModelAdmin):
-    list_display = ("user", "source", "collected_at")
-    search_fields = ("user__username", "source")
+    list_display = ("user_id", "source", "collected_at")
+    search_fields = ("user_id", "source")
