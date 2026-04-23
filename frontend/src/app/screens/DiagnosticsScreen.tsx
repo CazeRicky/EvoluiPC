@@ -1,5 +1,6 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { ChartCard } from '../components/ChartCard';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useState, useEffect } from 'react';
 import { apiService, Diagnostic } from '../services/api';
@@ -55,14 +56,7 @@ export function DiagnosticsScreen() {
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="p-4 space-y-5 pb-24 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Carregando diagnósticos...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Carregando diagnósticos..." />;
   }
 
   return (

@@ -2,6 +2,7 @@ import { Cpu, TrendingUp, Shield, DollarSign, Sparkles, Search, Upload, MonitorU
 import { StatCard } from '../components/StatCard';
 import { ChartCard } from '../components/ChartCard';
 import { QuickAction } from '../components/QuickAction';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router';
 import { useState, useEffect } from 'react';
@@ -36,14 +37,7 @@ export function HomeScreen() {
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="p-4 space-y-5 pb-24 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Carregando dados...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Carregando dados..." />;
   }
 
   if (!machine) {

@@ -1,4 +1,5 @@
 import { ArrowRight, TrendingUp, Zap } from 'lucide-react';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { apiService, UpgradeStep } from '../services/api';
@@ -48,14 +49,7 @@ export function RouteScreen() {
   const totalCost = upgradeRoute.reduce((sum, step) => sum + step.estimated_cost, 0);
 
   if (isLoading) {
-    return (
-      <div className="p-4 space-y-5 pb-24 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Carregando rota de upgrade...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Carregando rota de upgrade..." />;
   }
 
   return (
