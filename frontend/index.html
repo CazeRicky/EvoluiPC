@@ -4,17 +4,197 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EvoluiPC</title>
+<<<<<<< HEAD
     <meta name="description" content="O Waze do Upgrade de Hardware" />
     <link rel="manifest" href="/manifest.json" />
+=======
+>>>>>>> 4c52f0495ecc34ce3be4d35d8c2e7ddd6dfd5379
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+<<<<<<< HEAD
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+=======
+    <link rel="stylesheet" href="./styles.css?v=20260415a" />
+  </head>
+  <body>
+    <!-- Fundo visual da aplicação -->
+    <div class="bg-grid"></div>
+    <!-- Tela principal de autenticação -->
+    <div id="authScreen" class="auth-screen active">
+      <div class="auth-container">
+        <div class="auth-header">
+          <h1>EvoluiPC</h1>
+          <p class="auth-subtitle">Planejamento Inteligente de Upgrades</p>
+        </div>
+
+        <!-- Abas de login e cadastro -->
+        <div class="auth-tabs">
+          <button class="auth-tab-btn active" data-tab="login">Entrar</button>
+          <button class="auth-tab-btn" data-tab="register">Cadastrar</button>
+        </div>
+
+        <!-- Formulário de login -->
+        <form id="loginForm" class="auth-form active" data-form="login">
+          <div class="form-group">
+            <label for="authUsername">Usuário</label>
+            <input id="authUsername" type="text" placeholder="Digite seu usuário" autocomplete="username" />
+          </div>
+
+          <div class="form-group">
+            <label for="authPassword">Senha</label>
+            <input id="authPassword" type="password" placeholder="Digite sua senha" autocomplete="current-password" />
+          </div>
+
+          <button type="submit" class="auth-submit-btn">Entrar</button>
+          <p id="authApiError" class="auth-message error"></p>
+          <p id="authLoginMessage" class="auth-message ok"></p>
+        </form>
+
+        <!-- Formulário de cadastro -->
+        <form id="registerForm" class="auth-form" data-form="register">
+          <div class="form-group">
+            <label for="regUsername">Usuário</label>
+            <input id="regUsername" type="text" placeholder="Escolha um usuário" autocomplete="username" />
+          </div>
+
+          <div class="form-group">
+            <label for="regEmail">Email</label>
+            <input id="regEmail" type="email" placeholder="seu@email.com" autocomplete="email" />
+          </div>
+
+          <div class="form-group">
+            <label for="regPassword">Senha</label>
+            <input id="regPassword" type="password" placeholder="Crie uma senha forte" autocomplete="new-password" />
+          </div>
+
+          <div class="form-group">
+            <label for="regPasswordConfirm">Confirmar Senha</label>
+            <input id="regPasswordConfirm" type="password" placeholder="Confirme sua senha" autocomplete="new-password" />
+          </div>
+
+          <button type="submit" class="auth-submit-btn">Cadastrar</button>
+          <p id="authRegError" class="auth-message error"></p>
+          <p id="authRegMessage" class="auth-message ok"></p>
+        </form>
+
+        <!-- Configuração da API local -->
+        <div class="auth-footer">
+          <p class="auth-api-config">
+            <label for="authApiBase">API Base:</label>
+            <input id="authApiBase" type="text" value="http://127.0.0.1:8000" />
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard após autenticação -->
+    <div id="dashboardScreen" class="dashboard-screen">
+      <header class="topbar">
+        <div>
+          <p class="kicker"></p>
+          <h1>EvoluiPC Control Center</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="newSessionBtn" class="ghost-btn">Nova simulacao</button>
+          <button id="logoutTopbarBtn" class="ghost-btn">Sair</button>
+        </div>
+      </header>
+
+      <!-- Layout principal do painel -->
+      <main class="layout">
+      <aside class="side-nav">
+        <button class="tab-btn active" data-tab="overview">Visao geral</button>
+        <button class="tab-btn" data-tab="scan">Entrada Desktop</button>
+        <button class="tab-btn" data-tab="route">Rota de upgrade</button>
+        <button class="tab-btn" data-tab="catalog">Catalogo recomendado</button>
+      </aside>
+
+      <!-- Aba resumo da máquina -->
+      <section class="panel tab-panel active" id="overview">
+        <h2>Resumo do computador</h2>
+        <p class="subtitle">
+          Esse painel representa o estado atual enviado pelo executavel do computador.
+        </p>
+
+        <div style="margin: 1.5rem 0;">
+          <a href="./downloads/scanner.exe" download="Agente_EvoluiPC.exe" style="text-decoration: none;">
+            <button type="button" style="cursor: pointer; padding: 10px 20px; font-family: 'Space Grotesk', sans-serif; font-weight: bold; border-radius: 6px; border: 1px solid #444; display: flex; align-items: center; gap: 8px;">
+              📥 Baixar Agente EvoluiPC (.exe)
+            </button>
+          </a>
+          <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">Baixe e execute o agente para atualizar seu hardware automaticamente.</p>
+        </div>
+        <div class="metric-grid" id="metricGrid"></div>
+
+        <div class="status-card">
+          <h3>Diagnostico rapido</h3>
+          <ul id="diagnosticList"></ul>
+        </div>
+      </section>
+
+      <!-- Aba integração com backend -->
+      <section class="panel tab-panel" id="scan">
+        <h2>Entrada Desktop</h2>
+        <p class="subtitle">Faça login uma vez e carregue os dados salvos do usuario no Django.</p>
+
+        <div class="scan-grid">
+          <label for="apiBaseInput">Base da API</label>
+          <input id="apiBaseInput" type="text" value="http://127.0.0.1:8000" />
+
+          <label for="engineApiBaseInput">Base do Engine (Neo4j)</label>
+          <input id="engineApiBaseInput" type="text" value="http://127.0.0.1:8002" />
+
+          <label for="emailInput">Email</label>
+          <input id="emailInput" type="email" placeholder="Seu email (opcional no login)" />
+
+          <label for="usernameInput">Usuario</label>
+          <input id="usernameInput" type="text" placeholder="Seu usuario" />
+
+          <label for="passwordInput">Senha</label>
+          <input id="passwordInput" type="password" placeholder="Sua senha" />
+
+          <label for="authTokenInput">Token de acesso</label>
+          <input id="authTokenInput" type="text" placeholder="Preenchido automaticamente no login" />
+        </div>
+
+        <div class="row-actions">
+          <button id="registerBtn">Cadastrar</button>
+          <button id="loginBtn">Entrar</button>
+          <button id="logoutBtn">Sair</button>
+          <button id="fetchMachineBtn">Buscar meus dados</button>
+        </div>
+
+        <p id="sessionInfo" class="subtitle compact"></p>
+        <p id="scanMessage" class="message"></p>
+      </section>
+
+      <!-- Aba rota de upgrade -->
+      <section class="panel tab-panel" id="route">
+        <h2>Arvore de evolucao</h2>
+        <p class="subtitle">Ordem sugerida de upgrade para melhor custo-beneficio.</p>
+
+        <ol id="upgradeRoute" class="route-list"></ol>
+      </section>
+
+      <!-- Aba catálogo de recomendações -->
+      <section class="panel tab-panel" id="catalog">
+        <h2>Componentes recomendados</h2>
+        <p class="subtitle">Dados vindos do Engine Neo4j com fallback local.</p>
+        <p id="catalogSourceInfo" class="subtitle compact">Origem do catálogo: local (ainda não sincronizado).</p>
+
+        <div id="catalogGrid" class="catalog-grid"></div>
+      </section>
+      </main>
+    </div>
+
+    <script src="./app.js?v=20260422c"></script>
+>>>>>>> 4c52f0495ecc34ce3be4d35d8c2e7ddd6dfd5379
   </body>
 </html>

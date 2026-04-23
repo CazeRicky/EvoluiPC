@@ -1,7 +1,0 @@
-# Expõe app WSGI do Django.
-import os
-from django.core.wsgi import get_wsgi_application
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "evoluipc_backend.settings")
-# Objeto WSGI para servidores HTTP.
-application = get_wsgi_application()

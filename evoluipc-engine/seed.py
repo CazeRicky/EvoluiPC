@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from neo4j import GraphDatabase
 import os
 from dotenv import load_dotenv
@@ -9,6 +10,13 @@ AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 def popular_banco():
     with GraphDatabase.driver(URI, auth=AUTH) as driver:
         with driver.session() as session:
+=======
+from neo4j_config import NEO4J_DATABASE, get_driver
+
+def popular_banco():
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+>>>>>>> 4c52f0495ecc34ce3be4d35d8c2e7ddd6dfd5379
             print("Limpando banco antigo...")
             session.run("MATCH (n) DETACH DELETE n")
 
@@ -31,7 +39,11 @@ def popular_banco():
             MERGE (p)-[:COMPATIVEL_COM]->(m)
             """)
 
+<<<<<<< HEAD
             print("Sucesso! O Neo4j está abastecido com hardware real.")
+=======
+            print(f"Sucesso! O Neo4j '{NEO4J_DATABASE}' está abastecido com hardware real.")
+>>>>>>> 4c52f0495ecc34ce3be4d35d8c2e7ddd6dfd5379
 
 if __name__ == "__main__":
     popular_banco()
