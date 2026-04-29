@@ -42,10 +42,19 @@ if __name__ == "__main__":
     
     print(f"\n📡 Enviando para o servidor...")
     
-    payload = {
-        "username": usuario,
-        "hardware": meu_pc
-    }
+    # Exibe a classificação
+    classificacao = meu_pc.get('cpu_classification', {})
+    if classificacao:
+        tipo = classificacao.get('type', 'Desconhecido')
+        sufixo = classificacao.get('suffix', 'N/A')
+        conf = classificacao.get('confidence', 0)
+        print(f"\n🔍 Classificação de Dispositivo:")
+        print(f"- Tipo: {tipo}")
+        print(f"- Sufixo CPU: {sufixo if sufixo else '(não identificado)'}")
+        print(f"- Confiança: {conf}%")
+        print(f"- Descrição: {classificacao.get('description', 'N/A')}")
+        
+    print("\n📡 Autenticando no servidor EvoluiPC...")
     
     try:
         url = "http://127.0.0.1:8002/api/machine/upload"

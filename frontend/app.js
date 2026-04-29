@@ -31,9 +31,6 @@ const STORAGE_KEYS = {
   apiBase: "evoluipc.apiBase",
   engineApiBase: "evoluipc.engineApiBase",
   token: "evoluipc.token",
-  email: "evoluipc.email",
-  username: "evoluipc.username",
-  appState: "evoluipc.appState",
 };
 
 const state = structuredClone(initialState);
@@ -249,10 +246,8 @@ function sanitizeBaseUrl(url) {
 }
 
 function saveAuthSession(token, username, email, apiBase) {
-  // Salva sessão autenticada localmente.
+  // Salva apenas a credencial mínima para reabrir a sessão.
   localStorage.setItem(STORAGE_KEYS.token, token.trim());
-  localStorage.setItem(STORAGE_KEYS.username, username.trim());
-  localStorage.setItem(STORAGE_KEYS.email, email.trim());
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
   if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
@@ -263,8 +258,6 @@ function saveAuthSession(token, username, email, apiBase) {
 function clearAuthSession() {
   // Limpa dados de autenticação.
   localStorage.removeItem(STORAGE_KEYS.token);
-  localStorage.removeItem(STORAGE_KEYS.username);
-  localStorage.removeItem(STORAGE_KEYS.email);
   localStorage.removeItem(STORAGE_KEYS.apiBase);
 }
 
@@ -275,39 +268,17 @@ function saveApiBases(djangoBase, engineBase) {
 }
 
 function getAppStateStorageKey() {
-  // Isola cache por usuario para evitar reaproveitar estado de outra conta.
-  const username = localStorage.getItem(STORAGE_KEYS.username) || "anonymous";
-  return `${STORAGE_KEYS.appState}.${username}`;
+  // Mantido apenas por compatibilidade; o cache persistente foi removido.
+  return "evoluipc.appState";
 }
 
 function saveAppState() {
-  // Salva estado atual do app.
-  localStorage.setItem(getAppStateStorageKey(), JSON.stringify(state));
+  // O estado do usuário agora vem do backend, então não persiste no navegador.
 }
 
 function loadAppState() {
-  // Carrega estado salvo do app.
-  const rawState = localStorage.getItem(getAppStateStorageKey());
-
-  if (!rawState) {
-    return false;
-  }
-
-  try {
-    const parsedState = JSON.parse(rawState);
-
-    if (!parsedState.machine || !parsedState.diagnostics || !parsedState.route || !parsedState.catalog) {
-      return false;
-    }
-
-    state.machine = parsedState.machine;
-    state.diagnostics = parsedState.diagnostics;
-    state.route = parsedState.route;
-    state.catalog = parsedState.catalog;
-    return true;
-  } catch {
-    return false;
-  }
+  // Sem cache persistente local.
+  return false;
 }
 
 function isNetworkFetchError(error) {
@@ -681,19 +652,29 @@ async function handleRegister(event) {
   }
 }
 
-function populateDashboardFromSession() {
-  // Preenche painel com sessão salva.
+async function populateDashboardFromSession() {
+  // Preenche painel com a sessão ativa consultando o backend.
   const token = getStoredToken();
-  const username = localStorage.getItem(STORAGE_KEYS.username);
-  const email = localStorage.getItem(STORAGE_KEYS.email);
 
   apiBaseInput.value = getStoredApiBase();
   engineApiBaseInput.value = getStoredEngineApiBase();
-  usernameInput.value = username;
-  emailInput.value = email;
   authTokenInput.value = token;
 
-  setSessionInfo(`Autenticado como ${username || "usuário"}.`);
+  if (!token) {
+    setSessionInfo("Sem sessão ativa.");
+    return;
+  }
+
+  try {
+    const me = await apiRequest("/api/auth/me", token);
+    usernameInput.value = me.user?.username || "";
+    emailInput.value = me.user?.email || "";
+    setSessionInfo(`Autenticado como ${me.user?.username || "usuário"}.`);
+  } catch {
+    usernameInput.value = "";
+    emailInput.value = "";
+    setSessionInfo("Sessão ativa, aguardando leitura do perfil.");
+  }
 }
 
 function resetDashboardToNaState() {
@@ -749,7 +730,7 @@ async function handleDashboardLogin() {
     );
 
     saveAuthSession(loginData.token, loginData.user.username, loginData.user.email || "", djangoBase);
-    populateDashboardFromSession();
+    await populateDashboardFromSession();
     resetDashboardToNaState();
     await fetchMachineFromApi();
     setMessage(`Sessao atualizada para ${loginData.user.username}.`, "ok");
@@ -789,7 +770,7 @@ async function handleDashboardRegister() {
     );
 
     saveAuthSession(registerData.token, registerData.user.username, registerData.user.email || "", djangoBase);
-    populateDashboardFromSession();
+    await populateDashboardFromSession();
     resetDashboardToNaState();
     await fetchMachineFromApi();
     setMessage(`Conta criada e autenticada como ${registerData.user.username}.`, "ok");
@@ -816,6 +797,8 @@ async function handleDashboardLogout() {
     localStorage.removeItem(getAppStateStorageKey());
     clearAuthSession();
     authTokenInput.value = "";
+    usernameInput.value = "";
+    emailInput.value = "";
     passwordInput.value = "";
     state.machine = structuredClone(DEFAULT_MACHINE_STATE);
     state.diagnostics = structuredClone(DEFAULT_DIAGNOSTICS);
@@ -1046,15 +1029,8 @@ async function initializeApp() {
       return;
     }
 
-    populateDashboardFromSession();
-    const restoredAppState = loadAppState();
-    if (restoredAppState) {
-      renderOverview();
-      renderRoute();
-      renderCatalog();
-    } else {
-      resetDashboardToNaState();
-    }
+    await populateDashboardFromSession();
+    resetDashboardToNaState();
     showDashboardScreen();
     fetchMachineFromApi();
   } else {

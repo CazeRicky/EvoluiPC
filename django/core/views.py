@@ -10,8 +10,10 @@ from .neo4j_identity import (
 from .neo4j_store import (
     assign_random_pc_to_user,
     ensure_user_node,
+    get_user_profile,
     get_user_pc_parts,
     get_user_upgrade_options,
+    upsert_user_profile,
     upsert_user_pc_parts,
     upsert_user_upgrade_options,
 )
@@ -39,6 +41,20 @@ class RegisterView(APIView):
             )
             ensure_user_node(identity)
             assign_random_pc_to_user(identity)
+            upsert_user_profile(
+                identity,
+                {
+                    "registration": {
+                        "username": identity["username"],
+                        "email": identity["email"],
+                    },
+                    "auth": {
+                        "token_issued": True,
+                    },
+                },
+                source="web-register",
+                event_type="register",
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError:
@@ -72,6 +88,16 @@ class LoginView(APIView):
         )
         if not identity:
             return Response({"detail": "Credenciais invalidas."}, status=status.HTTP_401_UNAUTHORIZED)
+        upsert_user_profile(
+            identity,
+            {
+                "auth": {
+                    "last_login": True,
+                }
+            },
+            source="web-login",
+            event_type="login",
+        )
         return Response(
             {
                 "token": identity["token"],
@@ -89,13 +115,16 @@ class AuthMeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        profile = get_user_profile(request.user.id)
         return Response(
             {
                 "user": {
                     "id": request.user.id,
                     "username": request.user.username,
                     "email": request.user.email,
-                }
+                },
+                "profile": profile["profile"] if profile else {},
+                "profile_source": profile["source"] if profile else "neo4j-empty",
             }
         )
 
@@ -141,6 +170,19 @@ class MachineSyncView(APIView):
             route=payload.get("route", []),
             catalog=payload.get("catalog", []),
             source=source,
+        )
+        upsert_user_profile(
+            request.user,
+            {
+                "machine": payload["machine"],
+                "diagnostics": payload.get("diagnostics", []),
+                "route": payload.get("route", []),
+                "catalog": payload.get("catalog", []),
+                "schema_version": schema_version,
+                "source": source,
+            },
+            source=source,
+            event_type="machine_sync",
         )
 
         return Response(
