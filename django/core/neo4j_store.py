@@ -269,3 +269,125 @@ def upsert_user_upgrade_options(user, route, catalog, source):
                 "source": record["source"] or source,
                 "updated_at": record["updated_at"] or "",
             }
+
+
+def upsert_user_profile(user, profile, source="web", event_type="generic"):
+    profile_payload = profile if isinstance(profile, dict) else {"payload": profile}
+    query = """
+    MERGE (u:AppUser {user_id: $user_id})
+    ON CREATE SET u.username = $username, u.email = $email, u.created_at = $now
+    SET u.updated_at = $now
+    MERGE (u)-[:HAS_PROFILE]->(p:UserProfile)
+    SET p.username = $username,
+        p.email = $email,
+        p.profile_json = $profile_json,
+        p.source = $source,
+        p.event_type = $event_type,
+        p.updated_at = $now
+    RETURN p.profile_json AS profile_json, p.source AS source, p.event_type AS event_type, p.updated_at AS updated_at
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(
+                query,
+                user_id=_user_attr(user, "id"),
+                username=_user_attr(user, "username"),
+                email=_user_attr(user, "email", "") or "",
+                profile_json=_json_dumps(profile_payload, {}),
+                source=source,
+                event_type=event_type,
+                now=_now_iso(),
+            ).single()
+            return {
+                "profile": _json_loads(record["profile_json"], {}),
+                "source": record["source"] or source,
+                "event_type": record["event_type"] or event_type,
+                "updated_at": record["updated_at"] or "",
+            }
+
+
+def get_user_profile(user_id):
+    query = """
+    MATCH (u:AppUser {user_id: $user_id})
+    OPTIONAL MATCH (u)-[:HAS_PROFILE]->(p:UserProfile)
+    RETURN properties(p) AS props
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(query, user_id=user_id).single()
+            props = record["props"] if record else None
+            if not props:
+                return None
+            profile_payload = props.get("profile_json", props.get("profile"))
+            return {
+                "profile": _json_loads(profile_payload, {}),
+                "source": props.get("source") or "neo4j",
+                "event_type": props.get("event_type") or "generic",
+                "updated_at": props.get("updated_at") or "",
+            }
+
+
+def upsert_device_classification(user, cpu_classification, source="device-scanner"):
+    """
+    Armazena a classificação do dispositivo (Desktop/Laptop) para o usuário.
+    
+    cpu_classification deve ser um dicionário com:
+    - device_type: "Desktop" ou "Laptop"
+    - cpu_suffix: sufixo do processador (ex: "K", "H", "HX")
+    - description: descrição do sufixo
+    - confidence: confiança da classificação (0-100)
+    """
+    query = """
+    MERGE (u:AppUser {user_id: $user_id})
+    ON CREATE SET u.username = $username, u.email = $email, u.created_at = $now
+    SET u.updated_at = $now
+    MERGE (u)-[:HAS_DEVICE_INFO]->(d:DeviceClassification)
+    SET d.device_type = $device_type,
+        d.cpu_suffix = $cpu_suffix,
+        d.description = $description,
+        d.confidence = $confidence,
+        d.source = $source,
+        d.detected_at = $now
+    RETURN d.device_type AS device_type, d.cpu_suffix AS cpu_suffix, d.confidence AS confidence
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(
+                query,
+                user_id=_user_attr(user, "id"),
+                username=_user_attr(user, "username"),
+                email=_user_attr(user, "email", "") or "",
+                device_type=cpu_classification.get("device_type", "Desconhecido"),
+                cpu_suffix=cpu_classification.get("cpu_suffix", ""),
+                description=cpu_classification.get("description", ""),
+                confidence=cpu_classification.get("confidence", 0),
+                source=source,
+                now=_now_iso(),
+            ).single()
+            return {
+                "device_type": record["device_type"],
+                "cpu_suffix": record["cpu_suffix"],
+                "confidence": record["confidence"],
+            }
+
+
+def get_device_classification(user_id):
+    """Recupera a classificação do dispositivo para um usuário"""
+    query = """
+    MATCH (u:AppUser {user_id: $user_id})
+    OPTIONAL MATCH (u)-[:HAS_DEVICE_INFO]->(d:DeviceClassification)
+    RETURN properties(d) AS props
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(query, user_id=user_id).single()
+            props = record["props"] if record else None
+            if not props:
+                return None
+            return {
+                "device_type": props.get("device_type", "Desconhecido"),
+                "cpu_suffix": props.get("cpu_suffix", ""),
+                "description": props.get("description", ""),
+                "confidence": props.get("confidence", 0),
+                "detected_at": props.get("detected_at", ""),
+            }
