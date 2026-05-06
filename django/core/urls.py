@@ -9,6 +9,7 @@ from .views import (
     RecommendationView,
     RegisterView,
     UpgradeRouteView,
+    upgrade_route_me,
 )
 
 # Rotas publicas e autenticadas da API.
@@ -21,5 +22,6 @@ urlpatterns = [
     path("machine", MachineSyncView.as_view(), name="machine-sync-canonical"),
     path("machine/sync", MachineSyncView.as_view(), name="machine-sync"),
     path("upgrade-route/me", UpgradeRouteView.as_view(), name="upgrade-route-me"),
+    path("upgrade-route/me/", upgrade_route_me, name="upgrade-route-me"),
     path("recommendations/me", RecommendationView.as_view(), name="recommendations-me"),
 ]

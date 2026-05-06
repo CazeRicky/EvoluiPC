@@ -1,6 +1,11 @@
+from urllib import request
 from rest_framework import permissions, status
 from rest_framework.response import Response
+from .models import MachineSnapshot
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view
+# Importe a função que você acabou de criar no neo4j_store
+from .neo4j_store import get_upgrade_recommendation
 
 from .neo4j_identity import (
     authenticate_identity,
@@ -288,3 +293,47 @@ class RecommendationView(APIView):
             },
             status=200,
         )
+
+@api_view(['GET'])
+def upgrade_route_me(request):
+    """
+    Endpoint para obter upgrade recomendado baseado na máquina do usuário.
+    Retorna recomendação de CPU com melhor custo-benefício.
+    """
+    try:
+        # 1. Tenta buscar os dados reais da máquina do usuário no Neo4j
+        user_pc_data = get_user_pc_parts(request.user.id)
+        
+        if user_pc_data and user_pc_data.get("machine"):
+            current_mb = user_pc_data["machine"].get("motherboard", "A320M")
+            current_score = int(user_pc_data["machine"].get("cpu_score", 4000))
+        else:
+            # PLANO B: Se o usuário não tiver PC, usa um Setup Virtual!
+            current_mb = "A320M"  # Uma placa-mãe básica
+            current_score = 4000  # Uma pontuação baixa para forçar um upgrade
+            
+    except Exception as e:
+        # Fallback em caso de erro ao buscar dados do Neo4j
+        print(f"⚠️ Usando PC Virtual (Fallback). Motivo: {e}")
+        current_mb = "A320M"
+        current_score = 4000
+
+    # 2. Chama a Inteligência do Neo4j para recomendação
+    try:
+        upgrade_data = get_upgrade_recommendation(current_mb, current_score)
+    except Exception as e:
+        print(f"⚠️ Erro ao buscar recomendação: {e}")
+        upgrade_data = []
+    
+    # 3. Formata a resposta para o frontend
+    response_data = []
+    if upgrade_data and len(upgrade_data) > 0:
+        response_data.append({
+            "id": 1,
+            "component": "Processador",
+            "recommendation": upgrade_data[0].get('recommendation', 'N/A'),
+            "reason": "Maior salto de performance pelo menor preço. Totalmente compatível com sua placa-mãe atual, entregando o melhor custo-benefício da geração.",
+            "estimatedPrice": upgrade_data[0].get('price', 0)
+        })
+        
+    return Response(response_data, status=status.HTTP_200_OK)
