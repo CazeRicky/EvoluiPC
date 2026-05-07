@@ -6,7 +6,7 @@ from neo4j import GraphDatabase
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "17HBi0q5qWvMNWEDPm8sRpgaKjIuBA897BPfUU_ucGU")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 def get_driver():
@@ -68,6 +68,15 @@ def get_all_gpus():
             results = session.run(query).data()
             return results if results else []
 
+def get_gpu_compatibility(gpu_nome):
+    query = """
+    MATCH (gpu:GPU {nome: $gpu_nome})-[rel:COMPATIVEL_COM]->(mobo:PlacaMae)
+    RETURN gpu.nome, mobo.nome, mobo.pci_express, rel.slot_requerido
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query, gpu_nome=gpu_nome).data()
+            return results if results else []
 
 def get_upgrade_recommendation(current_mb_name, current_cpu_score):
     query = """
