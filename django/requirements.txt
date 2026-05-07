@@ -4,3 +4,4 @@ django-cors-headers
 neo4j
 gunicorn
 setuptools
+psutil
