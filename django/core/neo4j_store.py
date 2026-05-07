@@ -444,29 +444,3 @@ def get_device_classification(user_id):
                 "confidence": props.get("confidence", 0),
                 "detected_at": props.get("detected_at", ""),
             }
-        
-def get_upgrade_recommendation(current_mb_name, current_cpu_score):
-    # Pega as senhas do arquivo .env que o David configurou no settings.py
-    uri = os.environ.get("NEO4J_URI", "bolt://neo4j:7687")
-    user = os.environ.get("NEO4J_USER", "neo4j")
-    password = os.environ.get("NEO4J_PASSWORD", "evoluipc123")
-    
-    # Inicia a conexão
-    driver = GraphDatabase.driver(uri, auth=(user, password))
-
-    query = """
-    MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
-    MATCH (new_cpu:Processor)-[:FITS_IN]->(s)
-    WHERE new_cpu.performance_score > $current_cpu_score
-    WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
-    RETURN new_cpu.name AS recommendation, new_cpu.price AS price
-    ORDER BY cost_benefit_ratio DESC
-    LIMIT 1
-    """
-    
-    with driver.session() as session:
-        result = session.run(query, current_mb_name=current_mb_name, current_cpu_score=current_cpu_score)
-        data = result.data()
-    
-    driver.close() # Sempre bom fechar a porta ao sair!
-    return data
