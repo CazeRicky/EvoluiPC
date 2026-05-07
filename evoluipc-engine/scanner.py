@@ -10,7 +10,7 @@ except ImportError:
     wmi = None
 
 
-API_URL = "https://evoluipc-django.onrender.com"
+API_URL = "https://evoluipc-django.onrender.com/api/machine/upload"
 
 
 def ler_hardware_local():
