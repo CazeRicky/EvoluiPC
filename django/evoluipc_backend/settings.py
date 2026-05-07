@@ -11,7 +11,6 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*")
 
 # Apps instalados no projeto.
 INSTALLED_APPS = [
-    "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.staticfiles",
     "rest_framework",
@@ -78,7 +77,7 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "DJANGO_CORS_ALLOWED_ORIGINS",
-        "http://127.0.0.1:4173,http://localhost:4173,http://127.0.0.1:5500,http://localhost:5500"
+        "http://127.0.0.1:4173,http://localhost:4173,http://127.0.0.1:5500,http://localhost:5500,https://evoluipc-frontend.onrender.com"
     ).split(",")
     if origin.strip()
 ]
