@@ -1,4 +1,6 @@
 from django.urls import path
+from django.http import JsonResponse
+from django.urls import include, path   
 
 from .views import (
     AuthMeView,
@@ -14,6 +16,14 @@ from .views import (
     list_gpus,
     gpu_compatibility,
 )
+
+def home(request):
+    return JsonResponse({"status": "ok", "service": "evoluipc-django"})
+
+urlpatterns = [
+    path("", home),
+    path("api/", include("core.urls")),
+]
 
 # Rotas publicas e autenticadas da API.
 urlpatterns = [

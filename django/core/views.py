@@ -1,5 +1,6 @@
-from urllib import request
 import logging
+from urllib import request
+from neo4j.exceptions import Neo4jError
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from .models import MachineSnapshot
@@ -78,6 +79,12 @@ class RegisterView(APIView):
                 {"detail": "Falha ao salvar usuario no banco de identidade."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        except Neo4jError:
+            logger.exception("Erro do Neo4j no cadastro")
+            return Response(
+                {"detail": "Falha ao conectar no banco Neo4j."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         except Exception as exc:
             logger.exception("Erro inesperado no cadastro")
             return Response(
@@ -105,26 +112,42 @@ class LoginView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        identity = authenticate_identity(
-            username=serializer.validated_data["username"],
-            password=serializer.validated_data["password"],
-        )
+        try:
+            identity = authenticate_identity(
+                username=serializer.validated_data["username"],
+                password=serializer.validated_data["password"],
+            )
+        except Neo4jError:
+            logger.exception("Erro do Neo4j no login")
+            return Response(
+                {"detail": "Falha ao conectar no banco Neo4j."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         if not identity:
             return Response(
                 {"detail": "Credenciais invalidas."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        upsert_user_profile(
-            identity,
-            {
-                "auth": {
-                    "last_login": True,
-                }
-            },
-            source="web-login",
-            event_type="login",
-        )
+        try:
+            upsert_user_profile(
+                identity,
+                {
+                    "auth": {
+                        "last_login": True,
+                    }
+                },
+                source="web-login",
+                event_type="login",
+            )
+        except Neo4jError:
+            logger.exception("Erro do Neo4j ao atualizar perfil no login")
+            return Response(
+                {"detail": "Falha ao atualizar dados no banco Neo4j."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         return Response(
             {
                 "token": identity["token"],
