@@ -38,29 +38,37 @@ if __name__ == "__main__":
     print("=====================================\n")
     
     usuario = input("Digite seu nome de usuário: ").strip().lower()
-    meu_pc = ler_hardware_local()
+    token = input("Digite seu Token de Acesso (copie do painel web): ").strip()
     
-    print(f"\n📡 Enviando para o servidor...")
+    meu_pc = ler_hardware_local()
     
     payload = {
         "username": usuario,
-        "hardware": meu_pc
+        "machine": meu_pc
+    }
+    
+    cabecalhos = {
+        "Authorization": f"Token {token}",
+        "Content-Type": "application/json"
     }
     
     try:
-        url = "http://127.0.0.1:8002/api/machine/upload"
-        resposta = requests.post(url, json=payload, timeout=10)
+        # Se der erro 404, tente tirar o "/api" e deixar apenas "/machine/sync"
+        url = "https://evoluipc-django.onrender.com/api/machine/sync"
         
-        if resposta.status_code == 200:
-            print(f"\n✅ SUCESSO! Dados enviados para '{usuario}'.")
+        print(f"\n📡 Apresentando credenciais e enviando dados para a nuvem...")
+        resposta = requests.post(url, json=payload, headers=cabecalhos, timeout=15)
+        
+        if resposta.status_code in [200, 201]:
+            print(f"\n✅ SUCESSO! Dados de hardware salvos na nuvem para o usuário '{usuario}'.")
         else:
-            print(f"\n❌ ERRO NO SERVIDOR: Código {resposta.status_code}")
-            print(f"Caminho tentado: {url}")
-            print(f"Resposta: {resposta.text}")
+            print(f"\n❌ ERRO NO SERVIDOR: O servidor recusou os dados (Código {resposta.status_code})")
+            print(f"Resposta do servidor: {resposta.text}")
             
     except Exception as e:
-        print(f"\n❌ ERRO DE CONEXÃO: {e}")
-        print("Verifique se o Docker está rodando e a porta 8002 está aberta.")
+        print(f"\n❌ ERRO DE CONEXÃO: Não foi possível alcançar o servidor.")
+        print(f"Detalhe técnico: {e}")
+        print("Verifique sua conexão com a internet ou se o servidor do EvoluiPC está online.")
 
     print("\n=====================================")
     input("Aperte ENTER para fechar esta janela...")
