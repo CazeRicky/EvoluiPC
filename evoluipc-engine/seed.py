@@ -1,31 +1,57 @@
-from neo4j_config import NEO4J_DATABASE, get_driver
+import json
+import os
+from neo4j_config import get_driver, NEO4J_DATABASE
 
 def popular_banco():
-    with get_driver() as driver:
-        with driver.session(database=NEO4J_DATABASE) as session:
-            print("Limpando banco antigo...")
-            session.run("MATCH (n) DETACH DELETE n")
+    caminho_json = 'hardware.json'
+    
+    if not os.path.exists(caminho_json):
+        print(f"❌ Erro: '{caminho_json}' não encontrado. Rode o etl.py primeiro!")
+        return
 
-            print("Plantando Placas-mãe...")
-            session.run("CREATE (:PlacaMae {nome: 'ASUS PRIME A320M-K/BR', soquete: 'AM4', ram_tipo: 'DDR4'})")
-            session.run("CREATE (:PlacaMae {nome: 'Gigabyte B550M AORUS', soquete: 'AM4', ram_tipo: 'DDR4'})")
+    with open(caminho_json, 'r', encoding='utf-8') as f:
+        dados = json.load(f)
 
-            print("Plantando Processadores...")
-            session.run("CREATE (:Processador {nome: 'AMD Ryzen 7 5700X3D', soquete: 'AM4', preco: 1350, tier: 'High-End'})")
-            session.run("CREATE (:Processador {nome: 'AMD Ryzen 5 5600', soquete: 'AM4', preco: 850, tier: 'Mid-Range'})")
+    print("Injetando dados no Neo4j...")
 
-            print("Plantando Placas de Vídeo (GPUs)...")
-            session.run("CREATE (:PlacaDeVideo {nome: 'NVIDIA RTX 4060 8GB', preco: 1800, tier: 'Mid-High'})")
-            session.run("CREATE (:PlacaDeVideo {nome: 'AMD Radeon RX 6600 8GB', preco: 1300, tier: 'Mid-Range'})")
+    q_limpeza = "MATCH (n) WHERE n:Processador OR n:PlacaMae OR n:PlacaDeVideo DETACH DELETE n"
+    
+    q_cpus = """
+    UNWIND $batch AS cpu
+    MERGE (p:Processador {nome: cpu.nome})
+    SET p.soquete = cpu.soquete, p.tier = cpu.tier, p.preco = cpu.preco
+    """
+    
+    q_gpus = """
+    UNWIND $batch AS gpu
+    MERGE (g:PlacaDeVideo {nome: gpu.nome})
+    SET g.tier = gpu.tier, g.preco = gpu.preco
+    """
+    
+    q_mbs = """
+    UNWIND $batch AS mb
+    MERGE (m:PlacaMae {nome: mb.nome})
+    SET m.soquete = mb.soquete, m.ram_tipo = mb.ram_tipo, m.preco = mb.preco
+    """
 
-            print("Criando laços de compatibilidade (A Mágica dos Grafos)...")
-            session.run("""
-            MATCH (p:Processador), (m:PlacaMae)
-            WHERE p.soquete = m.soquete
-            MERGE (p)-[:COMPATIVEL_COM]->(m)
-            """)
+    q_relacoes = """
+    MATCH (c:Processador), (m:PlacaMae)
+    WHERE c.soquete = m.soquete
+    MERGE (c)-[:COMPATIVEL_COM]->(m)
+    """
 
-            print(f"Sucesso! O Neo4j '{NEO4J_DATABASE}' está abastecido com hardware real.")
+    try:
+        with get_driver() as driver:
+            with driver.session(database=NEO4J_DATABASE) as session:
+                session.run(q_limpeza)
+                session.run(q_cpus, batch=dados.get("processadores", []))
+                session.run(q_gpus, batch=dados.get("placas_de_video", []))
+                session.run(q_mbs, batch=dados.get("placas_mae", []))
+                session.run(q_relacoes)
+                
+        print("✅ Banco populado com sucesso! As relações de compatibilidade foram criadas.")
+    except Exception as e:
+        print(f"❌ Erro no Neo4j: {e}")
 
 if __name__ == "__main__":
     popular_banco()

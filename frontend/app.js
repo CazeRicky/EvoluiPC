@@ -1037,5 +1037,66 @@ async function initializeApp() {
     showAuthScreen();
   }
 }
+async function carregarRotaUpgrade() {
+      const btn = document.getElementById('btn-upgrade');
+      const resultadoDiv = document.getElementById('upgrade-resultado');
+
+      // Efeito visual de "Carregando"
+      btn.innerText = "Consultando Banco de Grafos...";
+      btn.disabled = true;
+      btn.style.backgroundColor = "#9e9e9e";
+
+      try {
+          // Pegamos o token com o nome correto que você encontrou
+          const token = localStorage.getItem('evoluipc.token'); 
+            
+          console.log("🕵️‍♂️ Token encontrado no navegador:", token);
+
+          // Fazemos a requisição com o token
+          const resposta = await fetch('http://localhost:8000/api/upgrade-route/me/', {
+              method: 'GET',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Token ${token}` // Usando o padrão 'Token'
+              }
+          });
+          
+          if (!resposta.ok) {
+              throw new Error(`Erro na API: Status ${resposta.status}`);
+          }
+
+          const dados = await resposta.json();
+
+          // Pega o primeiro item do array de recomendação (que é o Processador)
+          if (dados && dados.length > 0) {
+              const upgrade = dados[0];
+              
+              // Monta o Card HTML com os dados do Neo4j
+              resultadoDiv.innerHTML = `
+                  <div style="background-color: #f1f8e9; padding: 20px; border-radius: 8px; border-left: 5px solid #4CAF50;">
+                      <h3 style="margin-top: 0; color: #2e7d32;">🔥 Upgrade Recomendado: ${upgrade.component}</h3>
+                      <h1 style="margin: 10px 0;">${upgrade.recommendation}</h1>
+                      <p style="font-size: 18px;"><strong>Investimento Estimado:</strong> R$ ${upgrade.estimatedPrice}</p>
+                      <p style="color: #555; line-height: 1.5;"><strong>Por que?</strong> ${upgrade.reason}</p>
+                  </div>
+              `;
+              resultadoDiv.style.display = 'block'; // Mostra o card
+          } else {
+              resultadoDiv.innerHTML = "<p>Nenhuma recomendação de custo-benefício encontrada no momento.</p>";
+              resultadoDiv.style.display = 'block';
+          }
+
+      } catch (erro) {
+          console.error("Falha ao buscar upgrade:", erro);
+          resultadoDiv.innerHTML = `<p style="color: red;">Erro ao conectar com a API. Verifique o console (F12).</p>`;
+          resultadoDiv.style.display = 'block';
+      } finally {
+          // Restaura o botão ao estado original
+          btn.innerText = "Analisar Meu Setup 🚀";
+          btn.disabled = false;
+          btn.style.backgroundColor = "#4CAF50";
+      }
+}
+
 
 initializeApp();

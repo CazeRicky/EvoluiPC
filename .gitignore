@@ -2,3 +2,5 @@ __pycache__/
 .pytest_cache/
 *.pyc
 django/db.sqlite3
+*.csv
+hardware.json

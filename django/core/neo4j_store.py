@@ -2,7 +2,7 @@ import os
 import json
 import random
 from datetime import datetime, timezone
-
+from django.conf import settings
 from neo4j import GraphDatabase
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
@@ -45,6 +45,44 @@ def _user_attr(user, key, default=""):
     return getattr(user, key, default)
 
 
+def get_all_cpus():
+    """Busca todos os processadores disponíveis"""
+    query = """
+    MATCH (cpu:Processador)
+    RETURN cpu.nome, cpu.soquete, cpu.tdp, cpu.performance
+    ORDER BY cpu.nome
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query).data()
+            return results if results else []
+
+
+def get_all_gpus():
+    """Busca todas as GPUs disponíveis"""
+    query = """
+    MATCH (gpu:GPU)
+    RETURN gpu.nome, gpu.arquitetura, gpu.vram, gpu.tdp, gpu.performance
+    ORDER BY gpu.nome
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query).data()
+            return results if results else []
+
+
+def get_gpu_compatibility(gpu_nome):
+    """Busca compatibilidades de uma GPU específica"""
+    query = """
+    MATCH (gpu:GPU {nome: $gpu_nome})-[rel:COMPATIVEL_COM]->(mobo:PlacaMae)
+    RETURN gpu.nome, mobo.nome, mobo.pci_express, rel.slot_requerido
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query, gpu_nome=gpu_nome).data()
+            return results if results else []
+
+
 def _build_machine_payload(record):
     machine = {
         "cpu": record["cpu_name"],
@@ -71,31 +109,31 @@ def get_random_pc_profile(exclude_signatures=None):
     excluded = exclude_signatures or []
     query = """
     MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:PlacaDeVideo)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     WITH cpu, mb, gpu, cpu.nome + '|' + mb.nome + '|' + gpu.nome AS signature
     WHERE NOT signature IN $excluded
     RETURN
       cpu.nome AS cpu_name,
-      coalesce(cpu.tier, '') AS cpu_tier,
+      coalesce(cpu.performance, '') AS cpu_tier,
       coalesce(cpu.soquete, '') AS socket,
       mb.nome AS mb_name,
-      coalesce(mb.ram_tipo, '') AS ram_type,
+      coalesce(mb.pci_express, '') AS ram_type,
       gpu.nome AS gpu_name,
-      coalesce(gpu.tier, '') AS gpu_tier
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
     fallback_query = """
     MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:PlacaDeVideo)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     RETURN
       cpu.nome AS cpu_name,
-      coalesce(cpu.tier, '') AS cpu_tier,
+      coalesce(cpu.performance, '') AS cpu_tier,
       coalesce(cpu.soquete, '') AS socket,
       mb.nome AS mb_name,
-      coalesce(mb.ram_tipo, '') AS ram_type,
+      coalesce(mb.pci_express, '') AS ram_type,
       gpu.nome AS gpu_name,
-      coalesce(gpu.tier, '') AS gpu_tier
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
@@ -391,3 +429,29 @@ def get_device_classification(user_id):
                 "confidence": props.get("confidence", 0),
                 "detected_at": props.get("detected_at", ""),
             }
+        
+def get_upgrade_recommendation(current_mb_name, current_cpu_score):
+    # Pega as senhas do arquivo .env que o David configurou no settings.py
+    uri = os.environ.get("NEO4J_URI", "bolt://neo4j:7687")
+    user = os.environ.get("NEO4J_USER", "neo4j")
+    password = os.environ.get("NEO4J_PASSWORD", "evoluipc123")
+    
+    # Inicia a conexão
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    query = """
+    MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
+    MATCH (new_cpu:Processor)-[:FITS_IN]->(s)
+    WHERE new_cpu.performance_score > $current_cpu_score
+    WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
+    RETURN new_cpu.name AS recommendation, new_cpu.price AS price
+    ORDER BY cost_benefit_ratio DESC
+    LIMIT 1
+    """
+    
+    with driver.session() as session:
+        result = session.run(query, current_mb_name=current_mb_name, current_cpu_score=current_cpu_score)
+        data = result.data()
+    
+    driver.close() # Sempre bom fechar a porta ao sair!
+    return data
