@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 from django.conf import settings
 from neo4j import GraphDatabase
 
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
+uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+user = os.getenv("NEO4J_USER", "neo4j")
+password = os.getenv("NEO4J_PASSWORD", "17HBi0q5qWvMNWEDPm8sRpgaKjIuBA897BPfUU_ucGU")
+if not password:
+    raise RuntimeError("NEO4J_PASSWORD nao configurado no Django.")
+driver = GraphDatabase.driver(uri, auth=(user, password))
 
 
 def get_driver():
@@ -71,16 +73,20 @@ def get_all_gpus():
             return results if results else []
 
 
-def get_gpu_compatibility(gpu_nome):
-    """Busca compatibilidades de uma GPU específica"""
+def get_upgrade_recommendation(current_mb_name, current_cpu_score):
     query = """
-    MATCH (gpu:GPU {nome: $gpu_nome})-[rel:COMPATIVEL_COM]->(mobo:PlacaMae)
-    RETURN gpu.nome, mobo.nome, mobo.pci_express, rel.slot_requerido
+    MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
+    MATCH (new_cpu:Processor)-[:FITS_IN]->(s)
+    WHERE new_cpu.performance_score > $current_cpu_score
+    WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
+    RETURN new_cpu.name AS recommendation, new_cpu.price AS price
+    ORDER BY cost_benefit_ratio DESC
+    LIMIT 1
     """
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
-            results = session.run(query, gpu_nome=gpu_nome).data()
-            return results if results else []
+            result = session.run(query, current_mb_name=current_mb_name, current_cpu_score=current_cpu_score)
+            return result.data()
 
 
 def _build_machine_payload(record):
