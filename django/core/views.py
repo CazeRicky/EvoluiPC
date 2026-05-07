@@ -1,4 +1,5 @@
 from urllib import request
+import logging
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from .models import MachineSnapshot
@@ -422,3 +423,4 @@ def gpu_compatibility(request, gpu_name):
             "status": "error",
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
