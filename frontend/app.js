@@ -250,8 +250,8 @@ function saveAuthSession(token, username, email, apiBase) {
   localStorage.setItem(STORAGE_KEYS.token, token.trim());
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
-  if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-    localStorage.setItem(STORAGE_KEYS.engineApiBase, "https://seu-engine.onrender.com");
+    if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
+      localStorage.setItem(STORAGE_KEYS.engineApiBase, "https://evoluipc-engine.onrender.com");
   }
 }
 
