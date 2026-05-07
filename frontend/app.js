@@ -251,7 +251,7 @@ function saveAuthSession(token, username, email, apiBase) {
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
   if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-    localStorage.setItem(STORAGE_KEYS.engineApiBase, "http://127.0.0.1:8002");
+    localStorage.setItem(STORAGE_KEYS.engineApiBase, "https://seu-engine.onrender.com");
   }
 }
 
@@ -300,12 +300,12 @@ function getStoredToken() {
 
 function getStoredApiBase() {
   // Lê base da API salva.
-  return localStorage.getItem(STORAGE_KEYS.apiBase) || "http://127.0.0.1:8000";
+  return localStorage.getItem(STORAGE_KEYS.apiBase) || "https://evoluipc-django.onrender.com";
 }
 
 function getStoredEngineApiBase() {
   // Lê base do engine salva.
-  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "http://127.0.0.1:8002";
+  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "https://evoluipc-engine.onrender.com";
 }
 
 // Mensagens de validação
