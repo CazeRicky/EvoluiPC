@@ -1053,7 +1053,7 @@ async function carregarRotaUpgrade() {
           console.log("🕵️‍♂️ Token encontrado no navegador:", token);
 
           // Fazemos a requisição com o token
-          const resposta = await fetch('http://localhost:8000/api/upgrade-route/me/', {
+          const resposta = await fetch('https://evoluipc-django.onrender.com/api/upgrade-route/me', {
               method: 'GET',
               headers: {
                   'Content-Type': 'application/json',
