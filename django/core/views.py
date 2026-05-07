@@ -21,6 +21,9 @@ from .neo4j_store import (
     upsert_user_profile,
     upsert_user_pc_parts,
     upsert_user_upgrade_options,
+    get_all_cpus,
+    get_all_gpus,
+    get_gpu_compatibility,
 )
 from .serializers import (
     MachineSyncSerializer,
@@ -337,3 +340,61 @@ def upgrade_route_me(request):
         })
         
     return Response(response_data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def list_cpus(request):
+    """
+    Endpoint para listar todos os processadores disponíveis no banco.
+    """
+    try:
+        cpus = get_all_cpus()
+        return Response({
+            "status": "success",
+            "data": cpus,
+            "count": len(cpus)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def list_gpus(request):
+    """
+    Endpoint para listar todas as GPUs disponíveis no banco.
+    """
+    try:
+        gpus = get_all_gpus()
+        return Response({
+            "status": "success",
+            "data": gpus,
+            "count": len(gpus)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def gpu_compatibility(request, gpu_name):
+    """
+    Endpoint para listar compatibilidades de uma GPU específica.
+    """
+    try:
+        compatibility = get_gpu_compatibility(gpu_name)
+        return Response({
+            "status": "success",
+            "gpu": gpu_name,
+            "compatibility": compatibility,
+            "count": len(compatibility)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

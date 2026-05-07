@@ -45,6 +45,44 @@ def _user_attr(user, key, default=""):
     return getattr(user, key, default)
 
 
+def get_all_cpus():
+    """Busca todos os processadores disponíveis"""
+    query = """
+    MATCH (cpu:Processador)
+    RETURN cpu.nome, cpu.soquete, cpu.tdp, cpu.performance
+    ORDER BY cpu.nome
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query).data()
+            return results if results else []
+
+
+def get_all_gpus():
+    """Busca todas as GPUs disponíveis"""
+    query = """
+    MATCH (gpu:GPU)
+    RETURN gpu.nome, gpu.arquitetura, gpu.vram, gpu.tdp, gpu.performance
+    ORDER BY gpu.nome
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query).data()
+            return results if results else []
+
+
+def get_gpu_compatibility(gpu_nome):
+    """Busca compatibilidades de uma GPU específica"""
+    query = """
+    MATCH (gpu:GPU {nome: $gpu_nome})-[rel:COMPATIVEL_COM]->(mobo:PlacaMae)
+    RETURN gpu.nome, mobo.nome, mobo.pci_express, rel.slot_requerido
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query, gpu_nome=gpu_nome).data()
+            return results if results else []
+
+
 def _build_machine_payload(record):
     machine = {
         "cpu": record["cpu_name"],
@@ -71,31 +109,31 @@ def get_random_pc_profile(exclude_signatures=None):
     excluded = exclude_signatures or []
     query = """
     MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:PlacaDeVideo)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     WITH cpu, mb, gpu, cpu.nome + '|' + mb.nome + '|' + gpu.nome AS signature
     WHERE NOT signature IN $excluded
     RETURN
       cpu.nome AS cpu_name,
-      coalesce(cpu.tier, '') AS cpu_tier,
+      coalesce(cpu.performance, '') AS cpu_tier,
       coalesce(cpu.soquete, '') AS socket,
       mb.nome AS mb_name,
-      coalesce(mb.ram_tipo, '') AS ram_type,
+      coalesce(mb.pci_express, '') AS ram_type,
       gpu.nome AS gpu_name,
-      coalesce(gpu.tier, '') AS gpu_tier
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
     fallback_query = """
     MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:PlacaDeVideo)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     RETURN
       cpu.nome AS cpu_name,
-      coalesce(cpu.tier, '') AS cpu_tier,
+      coalesce(cpu.performance, '') AS cpu_tier,
       coalesce(cpu.soquete, '') AS socket,
       mb.nome AS mb_name,
-      coalesce(mb.ram_tipo, '') AS ram_type,
+      coalesce(mb.pci_express, '') AS ram_type,
       gpu.nome AS gpu_name,
-      coalesce(gpu.tier, '') AS gpu_tier
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
