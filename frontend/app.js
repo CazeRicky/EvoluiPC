@@ -31,9 +31,6 @@ const STORAGE_KEYS = {
   apiBase: "evoluipc.apiBase",
   engineApiBase: "evoluipc.engineApiBase",
   token: "evoluipc.token",
-  email: "evoluipc.email",
-  username: "evoluipc.username",
-  appState: "evoluipc.appState",
 };
 
 const state = structuredClone(initialState);
@@ -249,22 +246,18 @@ function sanitizeBaseUrl(url) {
 }
 
 function saveAuthSession(token, username, email, apiBase) {
-  // Salva sessão autenticada localmente.
+  // Salva apenas a credencial mínima para reabrir a sessão.
   localStorage.setItem(STORAGE_KEYS.token, token.trim());
-  localStorage.setItem(STORAGE_KEYS.username, username.trim());
-  localStorage.setItem(STORAGE_KEYS.email, email.trim());
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
-  if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-    localStorage.setItem(STORAGE_KEYS.engineApiBase, "http://127.0.0.1:8002");
+    if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
+      localStorage.setItem(STORAGE_KEYS.engineApiBase, "https://evoluipc-engine.onrender.com");
   }
 }
 
 function clearAuthSession() {
   // Limpa dados de autenticação.
   localStorage.removeItem(STORAGE_KEYS.token);
-  localStorage.removeItem(STORAGE_KEYS.username);
-  localStorage.removeItem(STORAGE_KEYS.email);
   localStorage.removeItem(STORAGE_KEYS.apiBase);
 }
 
@@ -275,39 +268,17 @@ function saveApiBases(djangoBase, engineBase) {
 }
 
 function getAppStateStorageKey() {
-  // Isola cache por usuario para evitar reaproveitar estado de outra conta.
-  const username = localStorage.getItem(STORAGE_KEYS.username) || "anonymous";
-  return `${STORAGE_KEYS.appState}.${username}`;
+  // Mantido apenas por compatibilidade; o cache persistente foi removido.
+  return "evoluipc.appState";
 }
 
 function saveAppState() {
-  // Salva estado atual do app.
-  localStorage.setItem(getAppStateStorageKey(), JSON.stringify(state));
+  // O estado do usuário agora vem do backend, então não persiste no navegador.
 }
 
 function loadAppState() {
-  // Carrega estado salvo do app.
-  const rawState = localStorage.getItem(getAppStateStorageKey());
-
-  if (!rawState) {
-    return false;
-  }
-
-  try {
-    const parsedState = JSON.parse(rawState);
-
-    if (!parsedState.machine || !parsedState.diagnostics || !parsedState.route || !parsedState.catalog) {
-      return false;
-    }
-
-    state.machine = parsedState.machine;
-    state.diagnostics = parsedState.diagnostics;
-    state.route = parsedState.route;
-    state.catalog = parsedState.catalog;
-    return true;
-  } catch {
-    return false;
-  }
+  // Sem cache persistente local.
+  return false;
 }
 
 function isNetworkFetchError(error) {
@@ -329,12 +300,12 @@ function getStoredToken() {
 
 function getStoredApiBase() {
   // Lê base da API salva.
-  return localStorage.getItem(STORAGE_KEYS.apiBase) || "http://127.0.0.1:8000";
+  return localStorage.getItem(STORAGE_KEYS.apiBase) || "https://evoluipc-django.onrender.com";
 }
 
 function getStoredEngineApiBase() {
   // Lê base do engine salva.
-  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "http://127.0.0.1:8002";
+  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "https://evoluipc-engine.onrender.com";
 }
 
 // Mensagens de validação
@@ -681,19 +652,29 @@ async function handleRegister(event) {
   }
 }
 
-function populateDashboardFromSession() {
-  // Preenche painel com sessão salva.
+async function populateDashboardFromSession() {
+  // Preenche painel com a sessão ativa consultando o backend.
   const token = getStoredToken();
-  const username = localStorage.getItem(STORAGE_KEYS.username);
-  const email = localStorage.getItem(STORAGE_KEYS.email);
 
   apiBaseInput.value = getStoredApiBase();
   engineApiBaseInput.value = getStoredEngineApiBase();
-  usernameInput.value = username;
-  emailInput.value = email;
   authTokenInput.value = token;
 
-  setSessionInfo(`Autenticado como ${username || "usuário"}.`);
+  if (!token) {
+    setSessionInfo("Sem sessão ativa.");
+    return;
+  }
+
+  try {
+    const me = await apiRequest("/api/auth/me", token);
+    usernameInput.value = me.user?.username || "";
+    emailInput.value = me.user?.email || "";
+    setSessionInfo(`Autenticado como ${me.user?.username || "usuário"}.`);
+  } catch {
+    usernameInput.value = "";
+    emailInput.value = "";
+    setSessionInfo("Sessão ativa, aguardando leitura do perfil.");
+  }
 }
 
 function resetDashboardToNaState() {
@@ -749,7 +730,7 @@ async function handleDashboardLogin() {
     );
 
     saveAuthSession(loginData.token, loginData.user.username, loginData.user.email || "", djangoBase);
-    populateDashboardFromSession();
+    await populateDashboardFromSession();
     resetDashboardToNaState();
     await fetchMachineFromApi();
     setMessage(`Sessao atualizada para ${loginData.user.username}.`, "ok");
@@ -789,7 +770,7 @@ async function handleDashboardRegister() {
     );
 
     saveAuthSession(registerData.token, registerData.user.username, registerData.user.email || "", djangoBase);
-    populateDashboardFromSession();
+    await populateDashboardFromSession();
     resetDashboardToNaState();
     await fetchMachineFromApi();
     setMessage(`Conta criada e autenticada como ${registerData.user.username}.`, "ok");
@@ -816,6 +797,8 @@ async function handleDashboardLogout() {
     localStorage.removeItem(getAppStateStorageKey());
     clearAuthSession();
     authTokenInput.value = "";
+    usernameInput.value = "";
+    emailInput.value = "";
     passwordInput.value = "";
     state.machine = structuredClone(DEFAULT_MACHINE_STATE);
     state.diagnostics = structuredClone(DEFAULT_DIAGNOSTICS);
@@ -1046,20 +1029,74 @@ async function initializeApp() {
       return;
     }
 
-    populateDashboardFromSession();
-    const restoredAppState = loadAppState();
-    if (restoredAppState) {
-      renderOverview();
-      renderRoute();
-      renderCatalog();
-    } else {
-      resetDashboardToNaState();
-    }
+    await populateDashboardFromSession();
+    resetDashboardToNaState();
     showDashboardScreen();
     fetchMachineFromApi();
   } else {
     showAuthScreen();
   }
 }
+async function carregarRotaUpgrade() {
+      const btn = document.getElementById('btn-upgrade');
+      const resultadoDiv = document.getElementById('upgrade-resultado');
+
+      // Efeito visual de "Carregando"
+      btn.innerText = "Consultando Banco de Grafos...";
+      btn.disabled = true;
+      btn.style.backgroundColor = "#9e9e9e";
+
+      try {
+          // Pegamos o token com o nome correto que você encontrou
+          const token = localStorage.getItem('evoluipc.token'); 
+            
+          console.log("🕵️‍♂️ Token encontrado no navegador:", token);
+
+          // Fazemos a requisição com o token
+          const resposta = await fetch('https://evoluipc-django.onrender.com/api/upgrade-route/me', {
+              method: 'GET',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Token ${token}` // Usando o padrão 'Token'
+              }
+          });
+          
+          if (!resposta.ok) {
+              throw new Error(`Erro na API: Status ${resposta.status}`);
+          }
+
+          const dados = await resposta.json();
+
+          // Pega o primeiro item do array de recomendação (que é o Processador)
+          if (dados && dados.length > 0) {
+              const upgrade = dados[0];
+              
+              // Monta o Card HTML com os dados do Neo4j
+              resultadoDiv.innerHTML = `
+                  <div style="background-color: #f1f8e9; padding: 20px; border-radius: 8px; border-left: 5px solid #4CAF50;">
+                      <h3 style="margin-top: 0; color: #2e7d32;">🔥 Upgrade Recomendado: ${upgrade.component}</h3>
+                      <h1 style="margin: 10px 0;">${upgrade.recommendation}</h1>
+                      <p style="font-size: 18px;"><strong>Investimento Estimado:</strong> R$ ${upgrade.estimatedPrice}</p>
+                      <p style="color: #555; line-height: 1.5;"><strong>Por que?</strong> ${upgrade.reason}</p>
+                  </div>
+              `;
+              resultadoDiv.style.display = 'block'; // Mostra o card
+          } else {
+              resultadoDiv.innerHTML = "<p>Nenhuma recomendação de custo-benefício encontrada no momento.</p>";
+              resultadoDiv.style.display = 'block';
+          }
+
+      } catch (erro) {
+          console.error("Falha ao buscar upgrade:", erro);
+          resultadoDiv.innerHTML = `<p style="color: red;">Erro ao conectar com a API. Verifique o console (F12).</p>`;
+          resultadoDiv.style.display = 'block';
+      } finally {
+          // Restaura o botão ao estado original
+          btn.innerText = "Analisar Meu Setup 🚀";
+          btn.disabled = false;
+          btn.style.backgroundColor = "#4CAF50";
+      }
+}
+
 
 initializeApp();

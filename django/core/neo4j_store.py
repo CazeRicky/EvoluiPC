@@ -2,14 +2,12 @@ import os
 import json
 import random
 from datetime import datetime, timezone
-
 from neo4j import GraphDatabase
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
-
 
 def get_driver():
     if not NEO4J_PASSWORD:
@@ -45,6 +43,61 @@ def _user_attr(user, key, default=""):
     return getattr(user, key, default)
 
 
+def get_all_cpus():
+    """Busca todos os processadores disponíveis"""
+    query = """
+    MATCH (cpu:Processador)
+    RETURN cpu.nome, cpu.soquete, cpu.tdp, cpu.performance
+    ORDER BY cpu.nome
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query).data()
+            return results if results else []
+
+
+def get_all_gpus():
+    """Busca todas as GPUs disponíveis"""
+    query = """
+    MATCH (gpu:GPU)
+    RETURN gpu.nome, gpu.arquitetura, gpu.vram, gpu.tdp, gpu.performance
+    ORDER BY gpu.nome
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query).data()
+            return results if results else []
+
+def get_gpu_compatibility(gpu_nome):
+    query = """
+    MATCH (gpu:GPU {nome: $gpu_nome})-[rel:COMPATIVEL_COM]->(mobo:PlacaMae)
+    RETURN gpu.nome, mobo.nome, mobo.pci_express, rel.slot_requerido
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query, gpu_nome=gpu_nome).data()
+            return results if results else []
+
+def get_upgrade_recommendation(current_mb_name, current_cpu_score):
+    query = """
+    MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
+    MATCH (new_cpu:Processor)-[:FITS_IN]->(s)
+    WHERE new_cpu.performance_score > $current_cpu_score
+    WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
+    RETURN new_cpu.name AS recommendation, new_cpu.price AS price
+    ORDER BY cost_benefit_ratio DESC
+    LIMIT 1
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            result = session.run(
+                query,
+                current_mb_name=current_mb_name,
+                current_cpu_score=current_cpu_score,
+            )
+            return result.data()
+
+
 def _build_machine_payload(record):
     machine = {
         "cpu": record["cpu_name"],
@@ -71,31 +124,31 @@ def get_random_pc_profile(exclude_signatures=None):
     excluded = exclude_signatures or []
     query = """
     MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:PlacaDeVideo)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     WITH cpu, mb, gpu, cpu.nome + '|' + mb.nome + '|' + gpu.nome AS signature
     WHERE NOT signature IN $excluded
     RETURN
       cpu.nome AS cpu_name,
-      coalesce(cpu.tier, '') AS cpu_tier,
+      coalesce(cpu.performance, '') AS cpu_tier,
       coalesce(cpu.soquete, '') AS socket,
       mb.nome AS mb_name,
-      coalesce(mb.ram_tipo, '') AS ram_type,
+      coalesce(mb.pci_express, '') AS ram_type,
       gpu.nome AS gpu_name,
-      coalesce(gpu.tier, '') AS gpu_tier
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
     fallback_query = """
     MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:PlacaDeVideo)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     RETURN
       cpu.nome AS cpu_name,
-      coalesce(cpu.tier, '') AS cpu_tier,
+      coalesce(cpu.performance, '') AS cpu_tier,
       coalesce(cpu.soquete, '') AS socket,
       mb.nome AS mb_name,
-      coalesce(mb.ram_tipo, '') AS ram_type,
+      coalesce(mb.pci_express, '') AS ram_type,
       gpu.nome AS gpu_name,
-      coalesce(gpu.tier, '') AS gpu_tier
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
@@ -268,4 +321,126 @@ def upsert_user_upgrade_options(user, route, catalog, source):
                 "catalog": _json_loads(record["catalog_json"], []),
                 "source": record["source"] or source,
                 "updated_at": record["updated_at"] or "",
+            }
+
+
+def upsert_user_profile(user, profile, source="web", event_type="generic"):
+    profile_payload = profile if isinstance(profile, dict) else {"payload": profile}
+    query = """
+    MERGE (u:AppUser {user_id: $user_id})
+    ON CREATE SET u.username = $username, u.email = $email, u.created_at = $now
+    SET u.updated_at = $now
+    MERGE (u)-[:HAS_PROFILE]->(p:UserProfile)
+    SET p.username = $username,
+        p.email = $email,
+        p.profile_json = $profile_json,
+        p.source = $source,
+        p.event_type = $event_type,
+        p.updated_at = $now
+    RETURN p.profile_json AS profile_json, p.source AS source, p.event_type AS event_type, p.updated_at AS updated_at
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(
+                query,
+                user_id=_user_attr(user, "id"),
+                username=_user_attr(user, "username"),
+                email=_user_attr(user, "email", "") or "",
+                profile_json=_json_dumps(profile_payload, {}),
+                source=source,
+                event_type=event_type,
+                now=_now_iso(),
+            ).single()
+            return {
+                "profile": _json_loads(record["profile_json"], {}),
+                "source": record["source"] or source,
+                "event_type": record["event_type"] or event_type,
+                "updated_at": record["updated_at"] or "",
+            }
+
+
+def get_user_profile(user_id):
+    query = """
+    MATCH (u:AppUser {user_id: $user_id})
+    OPTIONAL MATCH (u)-[:HAS_PROFILE]->(p:UserProfile)
+    RETURN properties(p) AS props
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(query, user_id=user_id).single()
+            props = record["props"] if record else None
+            if not props:
+                return None
+            profile_payload = props.get("profile_json", props.get("profile"))
+            return {
+                "profile": _json_loads(profile_payload, {}),
+                "source": props.get("source") or "neo4j",
+                "event_type": props.get("event_type") or "generic",
+                "updated_at": props.get("updated_at") or "",
+            }
+
+
+def upsert_device_classification(user, cpu_classification, source="device-scanner"):
+    """
+    Armazena a classificação do dispositivo (Desktop/Laptop) para o usuário.
+    
+    cpu_classification deve ser um dicionário com:
+    - device_type: "Desktop" ou "Laptop"
+    - cpu_suffix: sufixo do processador (ex: "K", "H", "HX")
+    - description: descrição do sufixo
+    - confidence: confiança da classificação (0-100)
+    """
+    query = """
+    MERGE (u:AppUser {user_id: $user_id})
+    ON CREATE SET u.username = $username, u.email = $email, u.created_at = $now
+    SET u.updated_at = $now
+    MERGE (u)-[:HAS_DEVICE_INFO]->(d:DeviceClassification)
+    SET d.device_type = $device_type,
+        d.cpu_suffix = $cpu_suffix,
+        d.description = $description,
+        d.confidence = $confidence,
+        d.source = $source,
+        d.detected_at = $now
+    RETURN d.device_type AS device_type, d.cpu_suffix AS cpu_suffix, d.confidence AS confidence
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(
+                query,
+                user_id=_user_attr(user, "id"),
+                username=_user_attr(user, "username"),
+                email=_user_attr(user, "email", "") or "",
+                device_type=cpu_classification.get("device_type", "Desconhecido"),
+                cpu_suffix=cpu_classification.get("cpu_suffix", ""),
+                description=cpu_classification.get("description", ""),
+                confidence=cpu_classification.get("confidence", 0),
+                source=source,
+                now=_now_iso(),
+            ).single()
+            return {
+                "device_type": record["device_type"],
+                "cpu_suffix": record["cpu_suffix"],
+                "confidence": record["confidence"],
+            }
+
+
+def get_device_classification(user_id):
+    """Recupera a classificação do dispositivo para um usuário"""
+    query = """
+    MATCH (u:AppUser {user_id: $user_id})
+    OPTIONAL MATCH (u)-[:HAS_DEVICE_INFO]->(d:DeviceClassification)
+    RETURN properties(d) AS props
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            record = session.run(query, user_id=user_id).single()
+            props = record["props"] if record else None
+            if not props:
+                return None
+            return {
+                "device_type": props.get("device_type", "Desconhecido"),
+                "cpu_suffix": props.get("cpu_suffix", ""),
+                "description": props.get("description", ""),
+                "confidence": props.get("confidence", 0),
+                "detected_at": props.get("detected_at", ""),
             }

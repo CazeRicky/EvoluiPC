@@ -1,4 +1,6 @@
 from django.urls import path
+from django.http import JsonResponse
+from django.urls import include, path   
 
 from .views import (
     AuthMeView,
@@ -9,7 +11,19 @@ from .views import (
     RecommendationView,
     RegisterView,
     UpgradeRouteView,
+    upgrade_route_me,
+    list_cpus,
+    list_gpus,
+    gpu_compatibility,
 )
+
+def home(request):
+    return JsonResponse({"status": "ok", "service": "evoluipc-django"})
+
+urlpatterns = [
+    path("", home),
+    path("api/", include("core.urls")),
+]
 
 # Rotas publicas e autenticadas da API.
 urlpatterns = [
@@ -21,5 +35,9 @@ urlpatterns = [
     path("machine", MachineSyncView.as_view(), name="machine-sync-canonical"),
     path("machine/sync", MachineSyncView.as_view(), name="machine-sync"),
     path("upgrade-route/me", UpgradeRouteView.as_view(), name="upgrade-route-me"),
+    path("upgrade-route/me/", upgrade_route_me, name="upgrade-route-me"),
     path("recommendations/me", RecommendationView.as_view(), name="recommendations-me"),
+    path("hardware/cpus", list_cpus, name="list-cpus"),
+    path("hardware/gpus", list_gpus, name="list-gpus"),
+    path("hardware/gpu/<str:gpu_name>/compatibility", gpu_compatibility, name="gpu-compatibility"),
 ]

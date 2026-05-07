@@ -1,28 +1,47 @@
+import multiprocessing
 import psutil
 import cpuinfo
-import wmi
 import requests
-import multiprocessing
 import sys
+
+try:
+    import wmi
+except ImportError:
+    wmi = None
+
+
+API_URL = "https://evoluipc-django.onrender.com/api/machine/sync"
+
 
 def ler_hardware_local():
     print("Iniciando varredura profunda de hardware...")
+
     info_cpu = cpuinfo.get_cpu_info()
-    nome_cpu = info_cpu.get('brand_raw', 'Processador não identificado')
+    nome_cpu = info_cpu.get("brand_raw", "Processador não identificado")
     ram_gb = round(psutil.virtual_memory().total / (1024 ** 3))
-    
+
     nome_gpu = "Não identificada"
     nome_placa_mae = "Não identificada"
-    try:
-        w = wmi.WMI()
-        for gpu in w.Win32_VideoController():
-            nome_gpu = gpu.Name
-            break
-        for board in w.Win32_BaseBoard():
-            nome_placa_mae = f"{board.Manufacturer} {board.Product}"
-            break
-    except Exception as e:
-        print(f"⚠️ Erro WMI: {e}")
+
+    if wmi is not None:
+        try:
+            w = wmi.WMI()
+
+            for gpu in w.Win32_VideoController():
+                if getattr(gpu, "Name", None):
+                    nome_gpu = gpu.Name
+                    break
+
+            for board in w.Win32_BaseBoard():
+                fabricante = getattr(board, "Manufacturer", "") or ""
+                produto = getattr(board, "Product", "") or ""
+                nome_placa_mae = f"{fabricante} {produto}".strip() or "Não identificada"
+                break
+
+        except Exception as e:
+            print(f"⚠️ Erro WMI: {e}")
+    else:
+        print("⚠️ Biblioteca WMI não disponível. GPU e placa-mãe podem não ser detectadas.")
 
     return {
         "cpu": nome_cpu,
@@ -31,12 +50,45 @@ def ler_hardware_local():
         "motherboard": nome_placa_mae
     }
 
+
+def montar_payload(meu_pc):
+    return {
+        "schema_version": "1.0",
+        "source": "desktop-agent",
+        "machine": meu_pc,
+        "diagnostics": [
+            f"CPU detectada: {meu_pc.get('cpu', 'N/A')}",
+            f"GPU detectada: {meu_pc.get('gpu', 'N/A')}",
+            f"RAM detectada: {meu_pc.get('ram', 'N/A')}",
+            f"Placa-mãe detectada: {meu_pc.get('motherboard', 'N/A')}"
+        ],
+        "route": [],
+        "catalog": []
+    }
+
+
+def enviar_para_servidor(token, payload):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Token {token}"
+    }
+
+    response = requests.post(
+        API_URL,
+        json=payload,
+        headers=headers,
+        timeout=20
+    )
+    return response
+
+
 if __name__ == "__main__":
     multiprocessing.freeze_support()
+
     print("=====================================")
     print("    EVOLUIPC - AGENTE DE HARDWARE    ")
     print("=====================================\n")
-    
+
     usuario = input("Digite seu nome de usuário: ").strip().lower()
     token = input("Digite seu Token de Acesso (copie do painel web): ").strip()
     
