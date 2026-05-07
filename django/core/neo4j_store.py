@@ -2,16 +2,12 @@ import os
 import json
 import random
 from datetime import datetime, timezone
-from django.conf import settings
 from neo4j import GraphDatabase
 
-uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-user = os.getenv("NEO4J_USER", "neo4j")
-password = os.getenv("NEO4J_PASSWORD", "17HBi0q5qWvMNWEDPm8sRpgaKjIuBA897BPfUU_ucGU")
-if not password:
-    raise RuntimeError("NEO4J_PASSWORD nao configurado no Django.")
-driver = GraphDatabase.driver(uri, auth=(user, password))
-
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 def get_driver():
     if not NEO4J_PASSWORD:
@@ -85,7 +81,11 @@ def get_upgrade_recommendation(current_mb_name, current_cpu_score):
     """
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
-            result = session.run(query, current_mb_name=current_mb_name, current_cpu_score=current_cpu_score)
+            result = session.run(
+                query,
+                current_mb_name=current_mb_name,
+                current_cpu_score=current_cpu_score,
+            )
             return result.data()
 
 
