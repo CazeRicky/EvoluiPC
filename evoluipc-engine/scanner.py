@@ -90,70 +90,37 @@ if __name__ == "__main__":
     print("=====================================\n")
 
     usuario = input("Digite seu nome de usuário: ").strip().lower()
-    token = input("Cole seu token de autenticação: ").strip()
-
-    if not usuario:
-        print("\n❌ Usuário não informado.")
-        input("Aperte ENTER para fechar esta janela...")
-        sys.exit(1)
-
-    if not token:
-        print("\n❌ Token não informado.")
-        input("Aperte ENTER para fechar esta janela...")
-        sys.exit(1)
-
+    token = input("Digite seu Token de Acesso (copie do painel web): ").strip()
+    
     meu_pc = ler_hardware_local()
-    payload = montar_payload(meu_pc)
-
-    print("\n📦 Dados coletados:")
-    print(f"- Usuário informado: {usuario}")
-    print(f"- CPU: {meu_pc['cpu']}")
-    print(f"- GPU: {meu_pc['gpu']}")
-    print(f"- RAM: {meu_pc['ram']}")
-    print(f"- Placa-mãe: {meu_pc['motherboard']}")
-
-    print("\n📡 Enviando para o servidor EvoluiPC...")
-
+    
+    payload = {
+        "username": usuario,
+        "machine": meu_pc
+    }
+    
+    cabecalhos = {
+        "Authorization": f"Token {token}",
+        "Content-Type": "application/json"
+    }
+    
     try:
-        resposta = enviar_para_servidor(token, payload)
-
-        if resposta.status_code == 200:
-            print(f"\n✅ SUCESSO! Dados enviados com sucesso para '{usuario}'.")
-            try:
-                data = resposta.json()
-                print("\n📄 Resposta do servidor:")
-                print(data)
-            except Exception:
-                print("\n📄 Resposta textual do servidor:")
-                print(resposta.text)
-
-        elif resposta.status_code == 401:
-            print("\n❌ ERRO 401: Token inválido ou expirado.")
-            print("Verifique se você colou o token correto retornado pelo login.")
-
-        elif resposta.status_code == 403:
-            print("\n❌ ERRO 403: Acesso negado.")
-            print("O servidor recebeu a requisição, mas recusou a autorização.")
-
-        elif resposta.status_code == 404:
-            print("\n❌ ERRO 404: Endpoint não encontrado.")
-            print(f"Verifique a rota configurada: {API_URL}")
-
+        # Se der erro 404, tente tirar o "/api" e deixar apenas "/machine/sync"
+        url = "https://evoluipc-django.onrender.com/api/machine/sync"
+        
+        print(f"\n📡 Apresentando credenciais e enviando dados para a nuvem...")
+        resposta = requests.post(url, json=payload, headers=cabecalhos, timeout=15)
+        
+        if resposta.status_code in [200, 201]:
+            print(f"\n✅ SUCESSO! Dados de hardware salvos na nuvem para o usuário '{usuario}'.")
         else:
-            print(f"\n❌ ERRO NO SERVIDOR: Código {resposta.status_code}")
-            print(f"URL tentada: {API_URL}")
-            print(f"Resposta: {resposta.text}")
-
-    except requests.exceptions.Timeout:
-        print("\n❌ ERRO: Tempo limite excedido ao tentar conectar ao servidor.")
-        print("O backend pode estar demorando para responder ou pode estar indisponível.")
-
-    except requests.exceptions.ConnectionError as e:
-        print(f"\n❌ ERRO DE CONEXÃO: {e}")
-        print("Verifique se a URL do backend está correta e se o serviço está online no Render.")
-
+            print(f"\n❌ ERRO NO SERVIDOR: O servidor recusou os dados (Código {resposta.status_code})")
+            print(f"Resposta do servidor: {resposta.text}")
+            
     except Exception as e:
-        print(f"\n❌ ERRO INESPERADO: {e}")
+        print(f"\n❌ ERRO DE CONEXÃO: Não foi possível alcançar o servidor.")
+        print(f"Detalhe técnico: {e}")
+        print("Verifique sua conexão com a internet ou se o servidor do EvoluiPC está online.")
 
     print("\n=====================================")
     input("Aperte ENTER para fechar esta janela...")
