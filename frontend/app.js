@@ -250,8 +250,10 @@ function saveAuthSession(token, username, email, apiBase) {
   localStorage.setItem(STORAGE_KEYS.token, token.trim());
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
-    if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-      localStorage.setItem(STORAGE_KEYS.engineApiBase, "https://evoluipc-engine.onrender.com");
+  if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
+    // Use relative URL or environment-based URL
+    const engineBase = window.EVOLUIPC_ENGINE_API_BASE || (window.location.origin + '/engine');
+    localStorage.setItem(STORAGE_KEYS.engineApiBase, engineBase);
   }
 }
 
@@ -300,12 +302,12 @@ function getStoredToken() {
 
 function getStoredApiBase() {
   // Lê base da API salva.
-  return localStorage.getItem(STORAGE_KEYS.apiBase) || "https://evoluipc-django.onrender.com";
+  return localStorage.getItem(STORAGE_KEYS.apiBase) || (window.location.origin + '/api');
 }
 
 function getStoredEngineApiBase() {
   // Lê base do engine salva.
-  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "https://evoluipc-engine.onrender.com";
+  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || (window.location.origin + '/engine');
 }
 
 // Mensagens de validação
@@ -1053,7 +1055,8 @@ async function carregarRotaUpgrade() {
           console.log("🕵️‍♂️ Token encontrado no navegador:", token);
 
           // Fazemos a requisição com o token
-          const resposta = await fetch('https://evoluipc-django.onrender.com/api/upgrade-route/me', {
+          const apiBase = getStoredApiBase();
+          const resposta = await fetch('https://evoluipc-backend.onrender.com/api/upgrade-route/me/', {
               method: 'GET',
               headers: {
                   'Content-Type': 'application/json',
