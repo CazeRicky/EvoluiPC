@@ -1056,7 +1056,7 @@ async function carregarRotaUpgrade() {
 
           // Fazemos a requisição com o token
           const apiBase = getStoredApiBase();
-          const resposta = await fetch(apiBase + '/api/upgrade-route/me/', {
+          const resposta = await fetch('https://evoluipc-backend.onrender.com/api/upgrade-route/me/', {
               method: 'GET',
               headers: {
                   'Content-Type': 'application/json',
