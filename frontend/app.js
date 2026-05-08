@@ -251,7 +251,9 @@ function saveAuthSession(token, username, email, apiBase) {
   localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
   if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-    localStorage.setItem(STORAGE_KEYS.engineApiBase, "http://127.0.0.1:8002");
+    // Use relative URL or environment-based URL
+    const engineBase = window.EVOLUIPC_ENGINE_API_BASE || (window.location.origin + '/engine');
+    localStorage.setItem(STORAGE_KEYS.engineApiBase, engineBase);
   }
 }
 
@@ -300,12 +302,12 @@ function getStoredToken() {
 
 function getStoredApiBase() {
   // Lê base da API salva.
-  return localStorage.getItem(STORAGE_KEYS.apiBase) || "http://127.0.0.1:8000";
+  return localStorage.getItem(STORAGE_KEYS.apiBase) || (window.location.origin + '/api');
 }
 
 function getStoredEngineApiBase() {
   // Lê base do engine salva.
-  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "http://127.0.0.1:8002";
+  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || (window.location.origin + '/engine');
 }
 
 // Mensagens de validação
@@ -1053,7 +1055,8 @@ async function carregarRotaUpgrade() {
           console.log("🕵️‍♂️ Token encontrado no navegador:", token);
 
           // Fazemos a requisição com o token
-          const resposta = await fetch('http://localhost:8000/api/upgrade-route/me/', {
+          const apiBase = getStoredApiBase();
+          const resposta = await fetch(apiBase + '/api/upgrade-route/me/', {
               method: 'GET',
               headers: {
                   'Content-Type': 'application/json',
