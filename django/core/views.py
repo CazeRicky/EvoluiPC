@@ -1,4 +1,6 @@
+import logging
 from urllib import request
+from neo4j.exceptions import Neo4jError
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from .models import MachineSnapshot
@@ -30,6 +32,8 @@ from .serializers import (
     RegisterSerializer,
 )
 
+logger = logging.getLogger(__name__)
+
 # Versoes de schema aceitas pela API.
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
 
@@ -41,6 +45,7 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         try:
             identity = ensure_user_identity(
                 username=serializer.validated_data["username"],
@@ -48,7 +53,7 @@ class RegisterView(APIView):
                 password=serializer.validated_data["password"],
             )
             ensure_user_node(identity)
-            assign_random_pc_to_user(identity)
+            # assign_random_pc_to_user(identity)
             upsert_user_profile(
                 identity,
                 {
@@ -64,12 +69,29 @@ class RegisterView(APIView):
                 event_type="register",
             )
         except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except RuntimeError:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except RuntimeError as exc:
+            logger.exception("Runtime error no cadastro")
             return Response(
                 {"detail": "Falha ao salvar usuario no banco de identidade."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        except Neo4jError:
+            logger.exception("Erro do Neo4j no cadastro")
+            return Response(
+                {"detail": "Falha ao conectar no banco Neo4j."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except Exception as exc:
+            logger.exception("Erro inesperado no cadastro")
+            return Response(
+                {"detail": f"Erro interno no cadastro: {str(exc)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
         return Response(
             {
                 "token": identity["token"],
@@ -90,22 +112,42 @@ class LoginView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        identity = authenticate_identity(
-            username=serializer.validated_data["username"],
-            password=serializer.validated_data["password"],
-        )
+        try:
+            identity = authenticate_identity(
+                username=serializer.validated_data["username"],
+                password=serializer.validated_data["password"],
+            )
+        except Neo4jError:
+            logger.exception("Erro do Neo4j no login")
+            return Response(
+                {"detail": "Falha ao conectar no banco Neo4j."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         if not identity:
-            return Response({"detail": "Credenciais invalidas."}, status=status.HTTP_401_UNAUTHORIZED)
-        upsert_user_profile(
-            identity,
-            {
-                "auth": {
-                    "last_login": True,
-                }
-            },
-            source="web-login",
-            event_type="login",
-        )
+            return Response(
+                {"detail": "Credenciais invalidas."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            upsert_user_profile(
+                identity,
+                {
+                    "auth": {
+                        "last_login": True,
+                    }
+                },
+                source="web-login",
+                event_type="login",
+            )
+        except Neo4jError:
+            logger.exception("Erro do Neo4j ao atualizar perfil no login")
+            return Response(
+                {"detail": "Falha ao atualizar dados no banco Neo4j."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         return Response(
             {
                 "token": identity["token"],
@@ -144,7 +186,10 @@ class LogoutView(APIView):
     def post(self, request):
         if request.auth:
             revoke_token(request.auth)
-        return Response({"detail": "Logout realizado."}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "Logout realizado."},
+            status=status.HTTP_200_OK,
+        )
 
 
 # Endpoint de sincronizacao da maquina.
@@ -229,6 +274,7 @@ class MachineCurrentView(APIView):
                 },
                 status=200,
             )
+
         return Response(
             {
                 "user_id": request.user.id,
@@ -259,6 +305,7 @@ class UpgradeRouteView(APIView):
                 },
                 status=200,
             )
+
         return Response(
             {
                 "user_id": request.user.id,
@@ -287,6 +334,7 @@ class RecommendationView(APIView):
                 },
                 status=200,
             )
+
         return Response(
             {
                 "user_id": request.user.id,
@@ -398,3 +446,4 @@ def gpu_compatibility(request, gpu_name):
             "status": "error",
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
