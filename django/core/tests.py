@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
+from neo4j.exceptions import Neo4jError
 
 from .neo4j_identity import Neo4jUser
 from .views import AuthMeView, LoginView, LogoutView, MachineCurrentView, MachineSyncView, RecommendationView, RegisterView, UpgradeRouteView
@@ -56,6 +57,19 @@ class Neo4jIdentityFlowTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["token"], "token-2")
+
+    @patch("core.views.authenticate_identity", side_effect=Neo4jError("neo4j auth failed"))
+    def test_login_returns_503_when_neo4j_fails(self, authenticate_identity_mock):
+        request = self.factory.post(
+            "/api/auth/login",
+            {"username": "user_test", "password": "12345678"},
+            format="json",
+        )
+        response = LoginView.as_view()(request)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data["detail"], "Falha ao conectar no banco Neo4j.")
+        authenticate_identity_mock.assert_called_once()
 
     @patch("core.views.get_user_pc_parts", return_value=None)
     def test_new_user_gets_empty_machine_state(self, _mock):
