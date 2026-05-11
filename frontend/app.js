@@ -56,6 +56,8 @@ function showDashboardScreen() {
   // Exibe painel principal após login.
   authScreen.classList.remove("active");
   dashboardScreen.classList.add("active");
+
+  startAutoFetch();
 }
 
 // Campos de autenticação
@@ -817,21 +819,23 @@ async function handleDashboardLogout() {
 
 // Dados do dashboard
 
-async function fetchMachineFromApi() {
+async function fetchMachineFromApi(isManual = true) {
   // Busca dados da máquina no backend.
   const token = authTokenInput.value.trim();
   const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
   const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
 
   if (!token) {
-    setMessage("Informe o token de autenticação.", "error");
+    if (isManual) setMessage("Informe o token de autenticação.", "error");
     return;
   }
 
   saveApiBases(djangoBase, engineBase);
 
-  fetchMachineBtn.disabled = true;
-  setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
+  if (isManual) {
+    fetchMachineBtn.disabled = true;
+    setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
+  }
 
   try {
     const [machineData, routeData] = await Promise.all([
@@ -876,7 +880,8 @@ async function fetchMachineFromApi() {
     };
 
     applyPayload(payload);
-    setMessage(`Dados carregados com sucesso. Catalogo via ${catalogSource}.`, "ok");
+    if (isManual) setMessage(`Dados carregados com sucesso. Catalogo via ${catalogSource}.`, "ok");
+    
   } catch (error) {
     if (isUnauthorizedError(error)) {
       clearAuthSession();
@@ -974,7 +979,7 @@ registerRealtimeValidation(regPasswordConfirm, validateRegisterPasswordConfirm);
 
 loginForm.addEventListener("submit", handleLogin);
 registerForm.addEventListener("submit", handleRegister);
-fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
+fetchMachineBtn.addEventListener("click", () => fetchMachineFromApi(true));
 logoutTopbarBtn.addEventListener("click", handleLogout);
 if (loginBtn) {
   loginBtn.addEventListener("click", handleDashboardLogin);
@@ -990,9 +995,35 @@ newSessionBtn.addEventListener("click", () => {
   saveAppState();
   setMessage("Sessao resetada para estado N/A aguardando dados do banco.", "ok");
 });
+let autoFetchInterval = null;
 
+function startAutoFetch() {
+  if (autoFetchInterval) return;
+  console.log("Auto-Refresh ativado: Aguardando dados do Scanner...");
+
+  autoFetchInterval = setInterval(async () => {
+    // Só tenta buscar se a máquina ainda estiver vazia (N/A)
+    if (state.machine.cpu === "N/A") {
+      await fetchMachineFromApi(false); // false = busca silenciosa
+      
+      if (state.machine.cpu !== "N/A") {
+        stopAutoFetch();
+        console.log("Dados detectados! Auto-refresh encerrado.");
+        setMessage("Setup detectado com sucesso!", "ok");
+      }
+    } else {
+      stopAutoFetch();
+    }
+  }, 5000); 
+}
+
+function stopAutoFetch() {
+  if (autoFetchInterval) {
+    clearInterval(autoFetchInterval);
+    autoFetchInterval = null;
+  }
+}
 // Inicialização do app
-
 async function initializeApp() {
   // Inicializa dados e valida sessão.
   const token = getStoredToken();
@@ -1010,31 +1041,33 @@ async function initializeApp() {
   if (token) {
     if (token.startsWith("local-")) {
       clearAuthSession();
-      setSessionInfo("Sessao local antiga removida. Faca login novamente.");
+      setSessionInfo("Sessão local antiga removida. Faça login novamente.");
       showAuthScreen();
       return;
     }
 
     try {
+      // Tenta validar quem é o dono do Token
       const me = await apiRequest("/api/auth/me", token);
       if (!me.user?.username) {
         throw new Error("Sessao invalida.");
       }
     } catch (error) {
-      clearAuthSession();
       if (isNetworkFetchError(error)) {
-        setSessionInfo("Sem conexao com backend. Faca login quando o servidor voltar.");
+        setSessionInfo("Servidor reconectando... O painel será carregado com dados em cache ou vazios temporariamente.");
+        console.warn("Backend indisponível no F5, mas o token foi mantido.");
       } else {
-        setSessionInfo("Sessao invalida. Faca login novamente.");
+        clearAuthSession();
+        setSessionInfo("Sessão expirada. Faça login novamente.");
+        showAuthScreen();
+        return;
       }
-      showAuthScreen();
-      return;
     }
-
     await populateDashboardFromSession();
     resetDashboardToNaState();
     showDashboardScreen();
-    fetchMachineFromApi();
+    fetchMachineFromApi(); 
+    
   } else {
     showAuthScreen();
   }
