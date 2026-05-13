@@ -1,4 +1,3 @@
-// Estado inicial do app
 
 const DEFAULT_MACHINE_STATE = {
   cpu: "N/A",
@@ -13,11 +12,7 @@ const DEFAULT_MACHINE_STATE = {
 const DEFAULT_DIAGNOSTICS = ["N/A"];
 
 const DEFAULT_ROUTE = [
-  {
-    step: "N/A",
-    action: "N/A",
-    impact: "N/A",
-  },
+  { step: "N/A", action: "N/A", impact: "N/A" },
 ];
 
 const initialState = {
@@ -28,104 +23,187 @@ const initialState = {
 };
 
 const STORAGE_KEYS = {
-  apiBase: "evoluipc.apiBase",
+  apiBase:       "evoluipc.apiBase",
   engineApiBase: "evoluipc.engineApiBase",
-  token: "evoluipc.token",
+  token:         "evoluipc.token",
 };
+
+// URLs fixas dos serviços no Render
+const BACKEND_URL = "https://evoluipc-django.onrender.com";
+const ENGINE_URL  = "https://evoluipc-engine.onrender.com";
+
+function getDefaultApiBase()       { return BACKEND_URL; }
+function getDefaultEngineApiBase() { return ENGINE_URL;  }
 
 const state = structuredClone(initialState);
+
 let catalogMeta = {
-  provider: "local",
-  database: "n/a",
+  provider:   "local",
+  database:   "n/a",
   fetched_at: "",
-  count: state.catalog.length,
+  count:      0,
 };
 
-// Alterna entre login e dashboard
+// ----------------------------------------------------------
+// localStorage seguro (não quebra em contextos bloqueados)
+// ----------------------------------------------------------
 
-const authScreen = document.getElementById("authScreen");
+function safeStorageGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeStorageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+function safeStorageRemove(key) {
+  try { localStorage.removeItem(key); } catch {}
+}
+
+// ----------------------------------------------------------
+// Utilitários de URL e JSON
+// ----------------------------------------------------------
+
+function sanitizeBaseUrl(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+/**
+ * Lê a resposta como texto e só faz JSON.parse se houver conteúdo.
+ * Evita "Unexpected end of JSON input" em respostas vazias.
+ */
+async function parseJsonSafely(response) {
+  const text = await response.text();
+  if (!text || !text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("[EvoluiPC] Resposta não é JSON válido:", text.slice(0, 300));
+    throw new Error("A resposta da API não veio em JSON válido.");
+  }
+}
+
+// ----------------------------------------------------------
+// Referências do DOM — autenticação
+// ----------------------------------------------------------
+
+const authScreen     = document.getElementById("authScreen");
 const dashboardScreen = document.getElementById("dashboardScreen");
+const loginForm      = document.getElementById("loginForm");
+const registerForm   = document.getElementById("registerForm");
+const authUsername   = document.getElementById("authUsername");
+const authPassword   = document.getElementById("authPassword");
+const regUsername    = document.getElementById("regUsername");
+const regEmail       = document.getElementById("regEmail");
+const regPassword    = document.getElementById("regPassword");
+const regPasswordConfirm = document.getElementById("regPasswordConfirm");
+const authApiError   = document.getElementById("authApiError");
+const authLoginMessage = document.getElementById("authLoginMessage");
+const authRegError   = document.getElementById("authRegError");
+const authRegMessage = document.getElementById("authRegMessage");
+
+// ----------------------------------------------------------
+// Referências do DOM — dashboard
+// ----------------------------------------------------------
+
+const metricGrid        = document.getElementById("metricGrid");
+const diagnosticList    = document.getElementById("diagnosticList");
+const routeList         = document.getElementById("upgradeRoute");
+const catalogGrid       = document.getElementById("catalogGrid");
+const catalogSourceInfo = document.getElementById("catalogSourceInfo");
+const authTokenInput    = document.getElementById("authTokenInput");
+const sessionTokenDisplay = document.getElementById("sessionToken");
+const copyTokenBtn      = document.getElementById("copyTokenBtn");
+const waitingBox        = document.getElementById("waitingBox");
+const successBox        = document.getElementById("successBox");
+const lastUpdate        = document.getElementById("lastUpdate");
+const statusIndicator   = document.getElementById("statusIndicator");
+const computerName      = document.getElementById("computerName");
+const sessionInfo       = document.getElementById("sessionInfo");
+const scanMessage       = document.getElementById("scanMessage");
+const fetchMachineBtn   = document.getElementById("fetchMachineBtn");
+const newSessionBtn     = document.getElementById("newSessionBtn");
+const logoutTopbarBtn   = document.getElementById("logoutTopbarBtn");
+
+// ----------------------------------------------------------
+// Alternância de telas
+// ----------------------------------------------------------
 
 function showAuthScreen() {
-  // Exibe tela de autenticação.
   authScreen.classList.add("active");
   dashboardScreen.classList.remove("active");
 }
 
 function showDashboardScreen() {
-  // Exibe painel principal após login.
   authScreen.classList.remove("active");
   dashboardScreen.classList.add("active");
-
-  startAutoFetch();
 }
 
-// Campos de autenticação
+// ----------------------------------------------------------
+// Geração de token de sessão para o Scanner
+// ----------------------------------------------------------
 
-const authApiBase = document.getElementById("authApiBase");
-const loginForm = document.getElementById("loginForm");
-const registerForm = document.getElementById("registerForm");
-const authUsername = document.getElementById("authUsername");
-const authPassword = document.getElementById("authPassword");
-const regUsername = document.getElementById("regUsername");
-const regEmail = document.getElementById("regEmail");
-const regPassword = document.getElementById("regPassword");
-const regPasswordConfirm = document.getElementById("regPasswordConfirm");
-const authApiError = document.getElementById("authApiError");
-const authLoginMessage = document.getElementById("authLoginMessage");
-const authRegError = document.getElementById("authRegError");
-const authRegMessage = document.getElementById("authRegMessage");
+function generateSessionToken() {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let token = "evp_sess_";
+  for (let i = 0; i < 32; i++) {
+    token += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  }
+  return token;
+}
 
-// Campos do dashboard
+function initializeSetupFlow() {
+  if (!sessionTokenDisplay || !copyTokenBtn || !authTokenInput) return;
 
-const metricGrid = document.getElementById("metricGrid");
-const diagnosticList = document.getElementById("diagnosticList");
-const routeList = document.getElementById("upgradeRoute");
-const catalogGrid = document.getElementById("catalogGrid");
-const catalogSourceInfo = document.getElementById("catalogSourceInfo");
-const apiBaseInput = document.getElementById("apiBaseInput");
-const engineApiBaseInput = document.getElementById("engineApiBaseInput");
-const emailInput = document.getElementById("emailInput");
-const usernameInput = document.getElementById("usernameInput");
-const passwordInput = document.getElementById("passwordInput");
-const authTokenInput = document.getElementById("authTokenInput");
-const sessionInfo = document.getElementById("sessionInfo");
-const scanMessage = document.getElementById("scanMessage");
-const fetchMachineBtn = document.getElementById("fetchMachineBtn");
-const newSessionBtn = document.getElementById("newSessionBtn");
-const logoutTopbarBtn = document.getElementById("logoutTopbarBtn");
-const registerBtn = document.getElementById("registerBtn");
-const loginBtn = document.getElementById("loginBtn");
-const logoutBtn = document.getElementById("logoutBtn");
+  const sessionToken = generateSessionToken();
+  sessionTokenDisplay.textContent = sessionToken;
+  authTokenInput.value = sessionToken;
 
-// Renderização principal
+  copyTokenBtn.addEventListener("click", async () => {
+    authTokenInput.value = sessionToken;
+
+    try {
+      await navigator.clipboard.writeText(sessionToken);
+      copyTokenBtn.textContent = "✅ Copiado!";
+    } catch {
+      copyTokenBtn.textContent = "Token pronto";
+    }
+
+    if (waitingBox)      waitingBox.style.display  = "flex";
+    if (successBox)      successBox.style.display  = "none";
+    if (lastUpdate)      lastUpdate.textContent     = "Sincronizando...";
+    if (statusIndicator) statusIndicator.textContent = "Aguardando resposta";
+
+    setTimeout(() => fetchMachineFromApi(), 1200);
+    setTimeout(() => { copyTokenBtn.textContent = "📋 Copiar"; }, 2000);
+  });
+}
+
+// ----------------------------------------------------------
+// Renderização
+// ----------------------------------------------------------
 
 function renderOverview() {
-  // Renderiza métricas e diagnóstico.
   metricGrid.innerHTML = "";
+
   const metricLabels = {
-    motherboard: "PLACA-MAE",
-    ram_type: "TIPO RAM",
-    storage: "ARMZENAMENTO",
+    motherboard: "PLACA-MÃE",
+    ram_type:    "TIPO RAM",
+    storage:     "ARMAZENAMENTO",
   };
 
   Object.entries(state.machine).forEach(([key, value]) => {
-    if (key === "cpu_tier" || key === "gpu_tier") {
-      return;
-    }
+    if (key === "cpu_tier" || key === "gpu_tier") return;
     const card = document.createElement("article");
     card.className = "metric-card";
     card.innerHTML = `
-      <p class="metric-label">${(metricLabels[key] || key.toUpperCase())}</p>
+      <p class="metric-label">${metricLabels[key] || key.toUpperCase()}</p>
       <p class="metric-value">${value}</p>
     `;
     metricGrid.appendChild(card);
   });
 
   diagnosticList.innerHTML = "";
-  const diagnosticsToRender = state.diagnostics.length ? state.diagnostics : DEFAULT_DIAGNOSTICS;
-
-  diagnosticsToRender.forEach((item) => {
+  const diags = state.diagnostics.length ? state.diagnostics : DEFAULT_DIAGNOSTICS;
+  diags.forEach((item) => {
     const li = document.createElement("li");
     li.textContent = item;
     diagnosticList.appendChild(li);
@@ -133,11 +211,9 @@ function renderOverview() {
 }
 
 function renderRoute() {
-  // Renderiza rota de upgrades.
   routeList.innerHTML = "";
-  const routeToRender = state.route.length ? state.route : DEFAULT_ROUTE;
-
-  routeToRender.forEach((entry) => {
+  const route = state.route.length ? state.route : DEFAULT_ROUTE;
+  route.forEach((entry) => {
     const li = document.createElement("li");
     li.className = "route-item";
     li.innerHTML = `<strong>${entry.step}: ${entry.action}</strong><span>${entry.impact}</span>`;
@@ -146,7 +222,6 @@ function renderRoute() {
 }
 
 function renderCatalog() {
-  // Renderiza catálogo recomendado.
   catalogGrid.innerHTML = "";
 
   if (!state.catalog.length) {
@@ -155,7 +230,7 @@ function renderCatalog() {
     card.innerHTML = `
       <span class="catalog-badge fallback">Sem dados</span>
       <h3>N/A</h3>
-      <p>Nenhuma recomendacao disponivel no momento.</p>
+      <p>Nenhuma recomendação disponível no momento.</p>
       <p class="catalog-meta">N/A</p>
     `;
     catalogGrid.appendChild(card);
@@ -165,28 +240,31 @@ function renderCatalog() {
   state.catalog.forEach((item) => {
     const card = document.createElement("article");
     card.className = "catalog-card";
-    const originLabel = item.origin === "neo4j" ? "Neo4j" : "Fallback";
-    const originClass = item.origin === "neo4j" ? "catalog-badge neo4j" : "catalog-badge fallback";
+    const isNeo4j = item.origin === "neo4j";
     card.innerHTML = `
-      <span class="${originClass}">${originLabel}</span>
-      <h3>${item.name}</h3>
-      <p>${item.tag}</p>
-      <p class="catalog-meta">${item.price} · ${item.source}</p>
+      <span class="catalog-badge ${isNeo4j ? "neo4j" : "fallback"}">${isNeo4j ? "Neo4j" : "Fallback"}</span>
+      <h3>${item.name  || "N/A"}</h3>
+      <p>${item.tag   || "Sem tag"}</p>
+      <p class="catalog-meta">${item.price  || "Preço indisponível"} · ${item.source || "Fonte não informada"}</p>
     `;
     catalogGrid.appendChild(card);
   });
 }
 
 function applyPayload(payload) {
-  // Atualiza estado com dados recebidos.
-  if (!payload.machine || !payload.diagnostics || !payload.route || !payload.catalog) {
+  if (
+    payload.machine    === undefined ||
+    payload.diagnostics === undefined ||
+    payload.route      === undefined ||
+    payload.catalog    === undefined
+  ) {
     throw new Error("Payload incompleto. Esperado: machine, diagnostics, route e catalog.");
   }
 
-  state.machine = Object.keys(payload.machine).length ? payload.machine : structuredClone(DEFAULT_MACHINE_STATE);
-  state.diagnostics = payload.diagnostics.length ? payload.diagnostics : structuredClone(DEFAULT_DIAGNOSTICS);
-  state.route = payload.route.length ? payload.route : structuredClone(DEFAULT_ROUTE);
-  state.catalog = payload.catalog;
+  state.machine     = Object.keys(payload.machine).length    ? payload.machine    : structuredClone(DEFAULT_MACHINE_STATE);
+  state.diagnostics = payload.diagnostics.length             ? payload.diagnostics : structuredClone(DEFAULT_DIAGNOSTICS);
+  state.route       = payload.route.length                   ? payload.route      : structuredClone(DEFAULT_ROUTE);
+  state.catalog     = payload.catalog;
 
   renderOverview();
   renderRoute();
@@ -194,186 +272,136 @@ function applyPayload(payload) {
   saveAppState();
 }
 
+// ----------------------------------------------------------
+// Mensagens de UI
+// ----------------------------------------------------------
+
 function setMessage(text, type) {
-  // Exibe mensagens do painel.
+  if (!scanMessage) return;
+  scanMessage.hidden    = false;
   scanMessage.textContent = text;
   scanMessage.className = `message ${type}`;
 }
 
 function setSessionInfo(text) {
-  // Exibe resumo da sessão atual.
+  if (!sessionInfo) return;
+  sessionInfo.hidden    = false;
   sessionInfo.textContent = text;
 }
 
 function setCatalogSourceInfo(text, status = "") {
-  // Informa a origem atual do catálogo.
-  if (!catalogSourceInfo) {
-    return;
-  }
-
+  if (!catalogSourceInfo) return;
   catalogSourceInfo.textContent = text;
   catalogSourceInfo.classList.remove("source-info-ok", "source-info-error");
-
-  if (status === "ok") {
-    catalogSourceInfo.classList.add("source-info-ok");
-  }
-
-  if (status === "error") {
-    catalogSourceInfo.classList.add("source-info-error");
-  }
+  if (status === "ok")    catalogSourceInfo.classList.add("source-info-ok");
+  if (status === "error") catalogSourceInfo.classList.add("source-info-error");
 }
 
-async function fetchCatalogFromEngine(engineBase) {
-  // Busca catálogo direto do Engine Neo4j.
-  const response = await fetch(`${engineBase}/api/recommendations/me`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+// ----------------------------------------------------------
+// Sessão e armazenamento
+// ----------------------------------------------------------
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Engine falhou ${response.status}. ${errorBody}`);
+function getStoredToken()          { return safeStorageGet(STORAGE_KEYS.token); }
+function getStoredApiBase()        { return safeStorageGet(STORAGE_KEYS.apiBase)       || getDefaultApiBase(); }
+function getStoredEngineApiBase()  { return safeStorageGet(STORAGE_KEYS.engineApiBase) || getDefaultEngineApiBase(); }
+
+function saveAuthSession(token) {
+  safeStorageSet(STORAGE_KEYS.token, String(token || "").trim());
+  if (!safeStorageGet(STORAGE_KEYS.engineApiBase)) {
+    safeStorageSet(STORAGE_KEYS.engineApiBase, getDefaultEngineApiBase());
   }
-
-  return response.json();
-}
-
-// Utilitários de sessão
-
-function sanitizeBaseUrl(url) {
-  // Remove barra final da URL.
-  return url.replace(/\/+$/, "");
-}
-
-function saveAuthSession(token, username, email, apiBase) {
-  // Salva apenas a credencial mínima para reabrir a sessão.
-  localStorage.setItem(STORAGE_KEYS.token, token.trim());
-  localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
-
-    if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-      localStorage.setItem(STORAGE_KEYS.engineApiBase, "https://evoluipc-engine.onrender.com");
+  if (!safeStorageGet(STORAGE_KEYS.apiBase)) {
+    safeStorageSet(STORAGE_KEYS.apiBase, getDefaultApiBase());
   }
 }
 
 function clearAuthSession() {
-  // Limpa dados de autenticação.
-  localStorage.removeItem(STORAGE_KEYS.token);
-  localStorage.removeItem(STORAGE_KEYS.apiBase);
+  safeStorageRemove(STORAGE_KEYS.token);
+  safeStorageRemove(STORAGE_KEYS.apiBase);
+  safeStorageRemove(STORAGE_KEYS.engineApiBase);
 }
 
 function saveApiBases(djangoBase, engineBase) {
-  // Salva bases de API usadas no painel.
-  localStorage.setItem(STORAGE_KEYS.apiBase, djangoBase.trim());
-  localStorage.setItem(STORAGE_KEYS.engineApiBase, engineBase.trim());
+  safeStorageSet(STORAGE_KEYS.apiBase,       String(djangoBase  || "").trim());
+  safeStorageSet(STORAGE_KEYS.engineApiBase, String(engineBase  || "").trim());
 }
 
-function getAppStateStorageKey() {
-  // Mantido apenas por compatibilidade; o cache persistente foi removido.
-  return "evoluipc.appState";
-}
+function getAppStateStorageKey() { return "evoluipc.appState"; }
+function saveAppState()          {}
+function loadAppState()          { return false; }
+function stopAutoFetch()         {}
 
-function saveAppState() {
-  // O estado do usuário agora vem do backend, então não persiste no navegador.
-}
-
-function loadAppState() {
-  // Sem cache persistente local.
-  return false;
-}
+// ----------------------------------------------------------
+// Detecção de erros
+// ----------------------------------------------------------
 
 function isNetworkFetchError(error) {
-  // Detecta falhas de rede.
-  const message = String(error?.message || "").toLowerCase();
-  return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("load failed");
+  const m = String(error?.message || "").toLowerCase();
+  return (
+    m.includes("failed to fetch") ||
+    m.includes("networkerror")    ||
+    m.includes("load failed")     ||
+    m.includes("network request failed")
+  );
 }
 
 function isUnauthorizedError(error) {
-  // Detecta sessão inválida por 401.
-  const message = String(error?.message || "").toLowerCase();
-  return message.includes("falha 401") || message.includes("status 401") || message.includes("unauthorized");
+  const m = String(error?.message || "").toLowerCase();
+  return (
+    m.includes("falha 401")    ||
+    m.includes("status 401")   ||
+    m.includes("unauthorized")
+  );
 }
 
-function getStoredToken() {
-  // Lê token salvo.
-  return localStorage.getItem(STORAGE_KEYS.token);
-}
-
-function getStoredApiBase() {
-  // Lê base da API salva.
-  return localStorage.getItem(STORAGE_KEYS.apiBase) || "https://evoluipc-django.onrender.com";
-}
-
-function getStoredEngineApiBase() {
-  // Lê base do engine salva.
-  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || "https://evoluipc-engine.onrender.com";
-}
-
-// Mensagens de validação
+// ----------------------------------------------------------
+// Mensagens de autenticação
+// ----------------------------------------------------------
 
 function clearAuthMessages() {
-  // Limpa mensagens de login/cadastro.
-  authApiError.textContent = "";
-  authApiError.classList.remove("show");
-  authLoginMessage.textContent = "";
-  authLoginMessage.classList.remove("show");
-  authRegError.textContent = "";
-  authRegError.classList.remove("show");
-  authRegMessage.textContent = "";
-  authRegMessage.classList.remove("show");
+  [authApiError, authLoginMessage, authRegError, authRegMessage].forEach((el) => {
+    el.textContent = "";
+    el.classList.remove("show");
+  });
 }
 
 function showAuthError(message, isRegister = false) {
-  // Exibe erro no formulário ativo.
-  if (isRegister) {
-    authRegError.textContent = message;
-    authRegError.classList.add("show");
-  } else {
-    authApiError.textContent = message;
-    authApiError.classList.add("show");
-  }
+  const el = isRegister ? authRegError : authApiError;
+  el.textContent = message;
+  el.classList.add("show");
 }
 
 function showAuthSuccess(message, isRegister = false) {
-  // Exibe sucesso no formulário ativo.
-  if (isRegister) {
-    authRegMessage.textContent = message;
-    authRegMessage.classList.add("show");
-  } else {
-    authLoginMessage.textContent = message;
-    authLoginMessage.classList.add("show");
-  }
+  const el = isRegister ? authRegMessage : authLoginMessage;
+  el.textContent = message;
+  el.classList.add("show");
 }
 
+// ----------------------------------------------------------
+// Validação de campos
+// ----------------------------------------------------------
+
 function getFieldErrorElement(input) {
-  // Garante container de erro por campo.
-  let fieldError = input.parentElement.querySelector(".field-error");
-
-  if (!fieldError) {
-    fieldError = document.createElement("p");
-    fieldError.className = "field-error";
-    input.parentElement.appendChild(fieldError);
+  let el = input.parentElement.querySelector(".field-error");
+  if (!el) {
+    el = document.createElement("p");
+    el.className = "field-error";
+    input.parentElement.appendChild(el);
   }
-
-  return fieldError;
+  return el;
 }
 
 function setFieldValidationState(input, message, forceShow = false) {
-  // Define estado visual de validação.
   const fieldError = getFieldErrorElement(input);
-  const hasValue = input.value.trim().length > 0;
-  const touched = input.dataset.touched === "true";
-  const shouldShowMessage = forceShow || touched || hasValue;
+  const hasValue   = input.value.trim().length > 0;
+  const touched    = input.dataset.touched === "true";
+  const show       = forceShow || touched || hasValue;
 
   input.classList.remove("is-valid", "is-invalid");
   fieldError.textContent = "";
   fieldError.classList.remove("show");
 
-  if (!shouldShowMessage) {
-    input.removeAttribute("aria-invalid");
-    return !message;
-  }
+  if (!show) { input.removeAttribute("aria-invalid"); return !message; }
 
   if (message) {
     input.classList.add("is-invalid");
@@ -388,171 +416,139 @@ function setFieldValidationState(input, message, forceShow = false) {
   return true;
 }
 
-function validateLoginUsername(forceShow = false) {
-  // Valida usuário do login.
-  const value = authUsername.value.trim();
-  let message = "";
-
-  if (!value) {
-    message = "Informe seu usuario.";
-  } else if (value.length < 3) {
-    message = "Usuario precisa ter pelo menos 3 caracteres.";
-  }
-
-  return setFieldValidationState(authUsername, message, forceShow);
+function validateLoginUsername(f = false) {
+  const v = authUsername.value.trim();
+  let msg = "";
+  if (!v)          msg = "Informe seu usuário.";
+  else if (v.length < 3) msg = "Usuário precisa ter pelo menos 3 caracteres.";
+  return setFieldValidationState(authUsername, msg, f);
 }
 
-function validateLoginPassword(forceShow = false) {
-  // Valida senha do login.
-  const value = authPassword.value;
-  let message = "";
-
-  if (!value) {
-    message = "Informe sua senha.";
-  } else if (value.length < 6) {
-    message = "Senha precisa ter pelo menos 6 caracteres.";
-  }
-
-  return setFieldValidationState(authPassword, message, forceShow);
+function validateLoginPassword(f = false) {
+  const v = authPassword.value;
+  let msg = "";
+  if (!v)          msg = "Informe sua senha.";
+  else if (v.length < 6) msg = "Senha precisa ter pelo menos 6 caracteres.";
+  return setFieldValidationState(authPassword, msg, f);
 }
 
-function validateRegisterUsername(forceShow = false) {
-  // Valida usuário do cadastro.
-  const value = regUsername.value.trim();
-  let message = "";
-
-  if (!value) {
-    message = "Escolha um usuario.";
-  } else if (value.length < 3) {
-    message = "Usuario precisa ter pelo menos 3 caracteres.";
-  }
-
-  return setFieldValidationState(regUsername, message, forceShow);
+function validateRegisterUsername(f = false) {
+  const v = regUsername.value.trim();
+  let msg = "";
+  if (!v)          msg = "Escolha um usuário.";
+  else if (v.length < 3) msg = "Usuário precisa ter pelo menos 3 caracteres.";
+  return setFieldValidationState(regUsername, msg, f);
 }
 
-function validateRegisterEmail(forceShow = false) {
-  // Valida email do cadastro.
-  const value = regEmail.value.trim();
-  let message = "";
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (!value) {
-    message = "Informe seu email.";
-  } else if (!emailPattern.test(value)) {
-    message = "Email invalido.";
-  }
-
-  return setFieldValidationState(regEmail, message, forceShow);
+function validateRegisterEmail(f = false) {
+  const v = regEmail.value.trim();
+  let msg = "";
+  const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!v)               msg = "Informe seu e-mail.";
+  else if (!pattern.test(v)) msg = "E-mail inválido.";
+  return setFieldValidationState(regEmail, msg, f);
 }
 
-function validateRegisterPassword(forceShow = false) {
-  // Valida senha do cadastro.
-  const value = regPassword.value;
-  let message = "";
-
-  if (!value) {
-    message = "Crie uma senha.";
-  } else if (value.length < 6) {
-    message = "Senha precisa ter pelo menos 6 caracteres.";
-  }
-
-  return setFieldValidationState(regPassword, message, forceShow);
+function validateRegisterPassword(f = false) {
+  const v = regPassword.value;
+  let msg = "";
+  if (!v)          msg = "Crie uma senha.";
+  else if (v.length < 6) msg = "Senha precisa ter pelo menos 6 caracteres.";
+  return setFieldValidationState(regPassword, msg, f);
 }
 
-function validateRegisterPasswordConfirm(forceShow = false) {
-  // Confere confirmação de senha.
-  const value = regPasswordConfirm.value;
-  let message = "";
-
-  if (!value) {
-    message = "Confirme sua senha.";
-  } else if (value !== regPassword.value) {
-    message = "As senhas nao conferem.";
-  }
-
-  return setFieldValidationState(regPasswordConfirm, message, forceShow);
+function validateRegisterPasswordConfirm(f = false) {
+  const v = regPasswordConfirm.value;
+  let msg = "";
+  if (!v)                    msg = "Confirme sua senha.";
+  else if (v !== regPassword.value) msg = "As senhas não conferem.";
+  return setFieldValidationState(regPasswordConfirm, msg, f);
 }
 
-function validateLoginForm(forceShow = false) {
-  // Valida formulário de login completo.
-  const usernameOk = validateLoginUsername(forceShow);
-  const passwordOk = validateLoginPassword(forceShow);
-  return usernameOk && passwordOk;
+function validateLoginForm(f = false) {
+  return validateLoginUsername(f) & validateLoginPassword(f);
 }
 
-function validateRegisterForm(forceShow = false) {
-  // Valida formulário de cadastro completo.
-  const usernameOk = validateRegisterUsername(forceShow);
-  const emailOk = validateRegisterEmail(forceShow);
-  const passwordOk = validateRegisterPassword(forceShow);
-  const confirmOk = validateRegisterPasswordConfirm(forceShow);
-  return usernameOk && emailOk && passwordOk && confirmOk;
+function validateRegisterForm(f = false) {
+  return (
+    validateRegisterUsername(f) &
+    validateRegisterEmail(f)    &
+    validateRegisterPassword(f) &
+    validateRegisterPasswordConfirm(f)
+  );
 }
 
 function clearFieldValidationStates() {
-  // Reseta estado de validação dos campos.
   [authUsername, authPassword, regUsername, regEmail, regPassword, regPasswordConfirm].forEach((input) => {
     input.classList.remove("is-valid", "is-invalid");
     input.removeAttribute("aria-invalid");
     input.dataset.touched = "false";
-
-    const fieldError = input.parentElement.querySelector(".field-error");
-    if (fieldError) {
-      fieldError.textContent = "";
-      fieldError.classList.remove("show");
-    }
+    const el = input.parentElement.querySelector(".field-error");
+    if (el) { el.textContent = ""; el.classList.remove("show"); }
   });
 }
 
 function registerRealtimeValidation(input, validator) {
-  // Liga validação em tempo real.
   input.addEventListener("input", () => {
     validator(false);
-    if (input === regPassword) {
-      validateRegisterPasswordConfirm(false);
-    }
+    if (input === regPassword) validateRegisterPasswordConfirm(false);
   });
-
   input.addEventListener("blur", () => {
     input.dataset.touched = "true";
     validator(true);
-    if (input === regPassword) {
-      validateRegisterPasswordConfirm(true);
-    }
+    if (input === regPassword) validateRegisterPasswordConfirm(true);
   });
 }
 
-// Requisições à API
+// ----------------------------------------------------------
+// Requisições HTTP
+// ----------------------------------------------------------
 
 async function apiRequest(path, token, method = "GET", payload = null, baseUrlOverride = null) {
-  // Faz requisição HTTP para API.
-  const baseUrl = sanitizeBaseUrl((baseUrlOverride || authApiBase.value || "").trim());
-  const headers = {
-    "Content-Type": "application/json",
-  };
+  const baseUrl = sanitizeBaseUrl((baseUrlOverride || getStoredApiBase()).trim());
+  const url     = `${baseUrl}${path}`;
 
-  if (token) {
-    headers.Authorization = `Token ${token}`;
-  }
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Token ${token}`;
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  console.log(`[EvoluiPC] ${method} ${url}`);
+
+  const response = await fetch(url, {
     method,
     headers,
     body: payload ? JSON.stringify(payload) : null,
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Falha ${response.status}. ${errorBody}`);
+    const errBody = await response.text();
+    throw new Error(`Falha ${response.status}. ${errBody}`);
   }
 
-  return response.json();
+  return await parseJsonSafely(response);
 }
 
+async function fetchCatalogFromEngine(engineBase) {
+  const url = `${sanitizeBaseUrl(engineBase)}/api/recommendations/me`;
+  console.log("[EvoluiPC] Engine GET", url);
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Engine falhou ${response.status}. ${errBody}`);
+  }
+
+  return await parseJsonSafely(response);
+}
+
+// ----------------------------------------------------------
 // Fluxo de autenticação
+// ----------------------------------------------------------
 
 async function handleLogin(event) {
-  // Processa login do usuário.
   event.preventDefault();
   clearAuthMessages();
 
@@ -563,38 +559,29 @@ async function handleLogin(event) {
 
   const username = authUsername.value.trim();
   const password = authPassword.value;
-
   const loginBtn = loginForm.querySelector("button[type='submit']");
   loginBtn.disabled = true;
 
   try {
-    const loginData = await apiRequest("/api/auth/login", null, "POST", {
-      username,
-      password,
-    });
+    const data = await apiRequest("/api/auth/login", null, "POST", { username, password });
 
-    saveAuthSession(
-      loginData.token,
-      loginData.user.username,
-      loginData.user.email || "",
-      authApiBase.value
-    );
+    if (!data?.token) throw new Error("Login não retornou token. Verifique o backend.");
 
-    showAuthSuccess(`Bem-vindo, ${loginData.user.username}! Redirecionando...`);
+    saveAuthSession(data.token);
+    showAuthSuccess(`Bem-vindo, ${data.user?.username || username}! Redirecionando...`);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       authPassword.value = "";
-      populateDashboardFromSession();
+      await populateDashboardFromSession();
       showDashboardScreen();
       resetDashboardToNaState();
       fetchMachineFromApi();
     }, 1000);
   } catch (error) {
     if (isNetworkFetchError(error)) {
-      showAuthError("Nao foi possivel conectar ao backend. Verifique se o servidor esta rodando.");
+      showAuthError("Não foi possível conectar ao backend. Verifique se o servidor está rodando.");
       return;
     }
-
     showAuthError(error.message || "Falha no login. Verifique suas credenciais.");
   } finally {
     loginBtn.disabled = false;
@@ -602,7 +589,6 @@ async function handleLogin(event) {
 }
 
 async function handleRegister(event) {
-  // Processa cadastro do usuário.
   event.preventDefault();
   clearAuthMessages();
 
@@ -612,42 +598,32 @@ async function handleRegister(event) {
   }
 
   const username = regUsername.value.trim();
-  const email = regEmail.value.trim();
+  const email    = regEmail.value.trim();
   const password = regPassword.value;
-
   const registerBtn = registerForm.querySelector("button[type='submit']");
   registerBtn.disabled = true;
 
   try {
-    const registerData = await apiRequest("/api/auth/register", null, "POST", {
-      username,
-      email,
-      password,
-    });
+    const data = await apiRequest("/api/auth/register", null, "POST", { username, email, password });
 
-    saveAuthSession(
-      registerData.token,
-      registerData.user.username,
-      registerData.user.email || "",
-      authApiBase.value
-    );
+    if (!data?.token) throw new Error("Cadastro não retornou token. Verifique o backend.");
 
-    showAuthSuccess(`Conta criada com sucesso! Bem-vindo, ${registerData.user.username}!`);
+    saveAuthSession(data.token);
+    showAuthSuccess(`Conta criada com sucesso! Bem-vindo, ${data.user?.username || username}!`, true);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       regPassword.value = "";
       regPasswordConfirm.value = "";
-      populateDashboardFromSession();
+      await populateDashboardFromSession();
       showDashboardScreen();
       resetDashboardToNaState();
       fetchMachineFromApi();
     }, 1000);
   } catch (error) {
     if (isNetworkFetchError(error)) {
-      showAuthError("Nao foi possivel conectar ao backend. Verifique se o servidor esta rodando.", true);
+      showAuthError("Não foi possível conectar ao backend.", true);
       return;
     }
-
     showAuthError(error.message || "Falha no cadastro.", true);
   } finally {
     registerBtn.disabled = false;
@@ -655,190 +631,68 @@ async function handleRegister(event) {
 }
 
 async function populateDashboardFromSession() {
-  // Preenche painel com a sessão ativa consultando o backend.
   const token = getStoredToken();
+  authTokenInput.value = token || "";
 
-  apiBaseInput.value = getStoredApiBase();
-  engineApiBaseInput.value = getStoredEngineApiBase();
-  authTokenInput.value = token;
-
-  if (!token) {
-    setSessionInfo("Sem sessão ativa.");
-    return;
-  }
+  if (!token) { setSessionInfo("Sem sessão ativa."); return; }
 
   try {
     const me = await apiRequest("/api/auth/me", token);
-    usernameInput.value = me.user?.username || "";
-    emailInput.value = me.user?.email || "";
-    setSessionInfo(`Autenticado como ${me.user?.username || "usuário"}.`);
+    setSessionInfo(`Autenticado como ${me?.user?.username || "usuário"}.`);
   } catch {
-    usernameInput.value = "";
-    emailInput.value = "";
     setSessionInfo("Sessão ativa, aguardando leitura do perfil.");
   }
 }
 
 function resetDashboardToNaState() {
-  // Reseta métricas, diagnóstico e rota para estado sem dados de máquina.
-  state.machine = structuredClone(DEFAULT_MACHINE_STATE);
+  state.machine     = structuredClone(DEFAULT_MACHINE_STATE);
   state.diagnostics = structuredClone(DEFAULT_DIAGNOSTICS);
-  state.route = structuredClone(DEFAULT_ROUTE);
+  state.route       = structuredClone(DEFAULT_ROUTE);
   renderOverview();
   renderRoute();
 }
 
 function handleLogout() {
-  // Encerra sessão do usuário.
-  localStorage.removeItem(getAppStateStorageKey());
+  stopAutoFetch();
+  safeStorageRemove(getAppStateStorageKey());
   clearAuthSession();
   clearAuthMessages();
   clearFieldValidationStates();
-  authUsername.value = "";
-  authPassword.value = "";
-  regUsername.value = "";
-  regEmail.value = "";
-  regPassword.value = "";
+
+  authUsername.value       = "";
+  authPassword.value       = "";
+  regUsername.value        = "";
+  regEmail.value           = "";
+  regPassword.value        = "";
   regPasswordConfirm.value = "";
+  authTokenInput.value     = "";
 
   showAuthScreen();
   setSessionInfo("Sessão encerrada.");
 }
 
-async function handleDashboardLogin() {
-  // Login direto pela aba Entrada Desktop para trocar de usuário rapidamente.
-  const username = (usernameInput.value || "").trim();
-  const password = passwordInput.value || "";
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-
-  if (!username || !password) {
-    setMessage("Informe usuario e senha para entrar.", "error");
-    return;
-  }
-
-  loginBtn.disabled = true;
-  setMessage("Autenticando usuario...", "ok");
-
-  try {
-    const loginData = await apiRequest(
-      "/api/auth/login",
-      null,
-      "POST",
-      {
-        username,
-        password,
-      },
-      djangoBase
-    );
-
-    saveAuthSession(loginData.token, loginData.user.username, loginData.user.email || "", djangoBase);
-    await populateDashboardFromSession();
-    resetDashboardToNaState();
-    await fetchMachineFromApi();
-    setMessage(`Sessao atualizada para ${loginData.user.username}.`, "ok");
-  } catch (error) {
-    setMessage(error.message || "Falha no login pela Entrada Desktop.", "error");
-  } finally {
-    loginBtn.disabled = false;
-  }
-}
-
-async function handleDashboardRegister() {
-  // Cadastro direto pela aba Entrada Desktop.
-  const username = (usernameInput.value || "").trim();
-  const email = (emailInput.value || "").trim();
-  const password = passwordInput.value || "";
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-
-  if (!username || !password) {
-    setMessage("Informe usuario e senha para cadastrar.", "error");
-    return;
-  }
-
-  registerBtn.disabled = true;
-  setMessage("Criando conta...", "ok");
-
-  try {
-    const registerData = await apiRequest(
-      "/api/auth/register",
-      null,
-      "POST",
-      {
-        username,
-        email,
-        password,
-      },
-      djangoBase
-    );
-
-    saveAuthSession(registerData.token, registerData.user.username, registerData.user.email || "", djangoBase);
-    await populateDashboardFromSession();
-    resetDashboardToNaState();
-    await fetchMachineFromApi();
-    setMessage(`Conta criada e autenticada como ${registerData.user.username}.`, "ok");
-  } catch (error) {
-    setMessage(error.message || "Falha no cadastro pela Entrada Desktop.", "error");
-  } finally {
-    registerBtn.disabled = false;
-  }
-}
-
-async function handleDashboardLogout() {
-  // Logout pela aba Entrada Desktop sem sair para a tela de autenticação.
-  const token = (authTokenInput.value || "").trim() || getStoredToken();
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-
-  logoutBtn.disabled = true;
-  try {
-    if (token) {
-      await apiRequest("/api/auth/logout", token, "POST", null, djangoBase);
-    }
-  } catch {
-    // Se o token ja expirou, seguimos limpando a sessao local.
-  } finally {
-    localStorage.removeItem(getAppStateStorageKey());
-    clearAuthSession();
-    authTokenInput.value = "";
-    usernameInput.value = "";
-    emailInput.value = "";
-    passwordInput.value = "";
-    state.machine = structuredClone(DEFAULT_MACHINE_STATE);
-    state.diagnostics = structuredClone(DEFAULT_DIAGNOSTICS);
-    state.route = structuredClone(DEFAULT_ROUTE);
-    state.catalog = [];
-    renderOverview();
-    renderRoute();
-    renderCatalog();
-    setSessionInfo("Sem sessao ativa.");
-    setMessage("Sessao encerrada na Entrada Desktop.", "ok");
-    logoutBtn.disabled = false;
-  }
-}
-
+// ----------------------------------------------------------
 // Dados do dashboard
+// ----------------------------------------------------------
 
-async function fetchMachineFromApi(isManual = true) {
-  // Busca dados da máquina no backend.
-  const token = authTokenInput.value.trim();
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-  const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
+async function fetchMachineFromApi() {
+  const token      = authTokenInput.value.trim();
+  const djangoBase = sanitizeBaseUrl(getStoredApiBase().trim());
+  const engineBase = sanitizeBaseUrl(getStoredEngineApiBase().trim());
 
   if (!token) {
-    if (isManual) setMessage("Informe o token de autenticação.", "error");
+    setMessage("Token de autenticação ausente.", "error");
     return;
   }
 
   saveApiBases(djangoBase, engineBase);
-
-  if (isManual) {
-    fetchMachineBtn.disabled = true;
-    setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
-  }
+  fetchMachineBtn.disabled = true;
+  setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
 
   try {
     const [machineData, routeData] = await Promise.all([
       apiRequest("/api/machine/me", token, "GET", null, djangoBase),
-      apiRequest("/api/upgrade-route/me", token, "GET", null, djangoBase),
+      apiRequest("/api/upgrade-route/me/", token, "GET", null, djangoBase),
     ]);
 
     let recommendationData;
@@ -846,83 +700,89 @@ async function fetchMachineFromApi(isManual = true) {
 
     try {
       recommendationData = await fetchCatalogFromEngine(engineBase);
-      catalogMeta = recommendationData.meta || {
-        provider: "neo4j",
-        database: "desconhecido",
+      catalogMeta = recommendationData?.meta || {
+        provider:   "neo4j",
+        database:   "desconhecido",
         fetched_at: "",
-        count: (recommendationData.catalog || []).length,
+        count:      (recommendationData?.catalog || []).length,
       };
       setCatalogSourceInfo(
         `Origem: Neo4j | DB: ${catalogMeta.database} | itens: ${catalogMeta.count}`,
         "ok"
       );
     } catch (engineError) {
-      recommendationData = await apiRequest("/api/recommendations/me", token, "GET", null, djangoBase);
+      console.warn("[EvoluiPC] Engine indisponível, usando fallback Django.", engineError.message);
+      recommendationData = await apiRequest("/api/recommendations/me/", token, "GET", null, djangoBase);
       catalogSource = "Django (fallback)";
-      const fallbackCatalog = recommendationData.catalog || recommendationData;
-      fallbackCatalog.forEach((item) => {
-        item.origin = "fallback";
-      });
+      const fallbackCatalog = recommendationData?.catalog || recommendationData || [];
+      fallbackCatalog.forEach((item) => { item.origin = "fallback"; });
       recommendationData = { catalog: fallbackCatalog };
       setCatalogSourceInfo(
-        `Origem do catálogo: Django (fallback do Engine). Motivo: ${engineError.message}`,
+        `Catálogo via Django (fallback). Motivo: ${engineError.message}`,
         "error"
       );
     }
 
     const payload = {
-      machine: machineData.machine || machineData,
-      diagnostics: machineData.diagnostics || [],
-      route: routeData.route || [],
-      catalog: recommendationData.catalog || recommendationData,
+      machine:     machineData?.machine    || machineData    || {},
+      diagnostics: machineData?.diagnostics || [],
+      route:       routeData?.route        || routeData      || [],
+      catalog:     recommendationData?.catalog || [],
     };
 
     applyPayload(payload);
-    if (isManual) setMessage(`Dados carregados com sucesso. Catalogo via ${catalogSource}.`, "ok");
-    
+    setMessage(`Dados carregados. Catálogo via ${catalogSource}.`, "ok");
+
+    if (waitingBox)      waitingBox.style.display  = "none";
+    if (successBox)      successBox.style.display  = "flex";
+    if (statusIndicator) statusIndicator.textContent = "Sincronizado";
+    if (lastUpdate) {
+      lastUpdate.textContent = new Date().toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    }
+    if (computerName) {
+      computerName.textContent =
+        machineData?.machine?.computer_name ||
+        machineData?.machine?.hostname      ||
+        "Setup ativo";
+    }
   } catch (error) {
     if (isUnauthorizedError(error)) {
+      stopAutoFetch();
       clearAuthSession();
       showAuthScreen();
-      setMessage("Sessao expirada. Faca login novamente.", "error");
-      return;
-    }
-
-    if (isNetworkFetchError(error) && loadAppState()) {
-      renderOverview();
-      renderRoute();
-      renderCatalog();
-      setCatalogSourceInfo("Origem do catálogo: armazenamento local (sem conexão).", "error");
-      setMessage("Backend indisponível. Dados carregados do armazenamento local.", "ok");
+      setMessage("Sessão expirada. Faça login novamente.", "error");
       return;
     }
 
     if (isNetworkFetchError(error)) {
-      saveAppState();
-      setCatalogSourceInfo("Origem do catálogo: armazenamento local (sem conexão).", "error");
-      setMessage("Backend indisponível. Sem dados de maquina, diagnostico e rota neste momento.", "error");
+      setCatalogSourceInfo("Catálogo: armazenamento local (sem conexão).", "error");
+      setMessage("Backend indisponível. Sem dados de máquina no momento.", "error");
       return;
     }
 
     setMessage(error.message || "Erro ao consultar API.", "error");
+    if (waitingBox) waitingBox.style.display = "flex";
+    if (successBox) successBox.style.display = "none";
   } finally {
     fetchMachineBtn.disabled = false;
   }
 }
 
 async function syncCatalogFromEngineOnLoad() {
-  // Sincroniza catálogo do Engine sem depender do login.
-  const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
-  setCatalogSourceInfo(`Sincronizando catálogo com ${engineBase}...`, "");
+  const engineBase = sanitizeBaseUrl(getStoredEngineApiBase().trim());
+  setCatalogSourceInfo(`Sincronizando catálogo com Engine...`, "");
 
   try {
-    const recommendationData = await fetchCatalogFromEngine(engineBase);
-    state.catalog = recommendationData.catalog || recommendationData;
-    catalogMeta = recommendationData.meta || {
-      provider: "neo4j",
-      database: "desconhecido",
+    const data = await fetchCatalogFromEngine(engineBase);
+    state.catalog = data?.catalog || data || [];
+    catalogMeta = data?.meta || {
+      provider:   "neo4j",
+      database:   "desconhecido",
       fetched_at: "",
-      count: (recommendationData.catalog || []).length,
+      count:      (data?.catalog || []).length,
     };
     renderCatalog();
     saveAppState();
@@ -931,103 +791,145 @@ async function syncCatalogFromEngineOnLoad() {
       "ok"
     );
   } catch (error) {
-    setCatalogSourceInfo(`Origem do catálogo: local (Engine indisponível). Motivo: ${error.message}`, "error");
+    console.warn("[EvoluiPC] Engine indisponível no carregamento.", error.message);
+    setCatalogSourceInfo(`Catálogo local (Engine indisponível). Motivo: ${error.message}`, "error");
   }
 }
 
-// Abas do dashboard
+// ----------------------------------------------------------
+// Rota de upgrade (botão "Analisar meu setup")
+// ----------------------------------------------------------
+
+async function carregarRotaUpgrade() {
+  const btn         = document.getElementById("btn-upgrade");
+  const resultadoDiv = document.getElementById("upgrade-resultado");
+
+  btn.textContent       = "Consultando Banco de Grafos...";
+  btn.disabled          = true;
+  btn.style.backgroundColor = "#9e9e9e";
+
+  try {
+    const token = safeStorageGet("evoluipc.token");
+
+    if (!token) {
+      resultadoDiv.innerHTML  = `<p style="color:red;">Você precisa estar logado para ver recomendações.</p>`;
+      resultadoDiv.style.display = "block";
+      return;
+    }
+
+    const resposta = await fetch(
+      `${BACKEND_URL}/api/upgrade-route/me/`,
+      {
+        method:  "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:  `Token ${token}`,
+        },
+      }
+    );
+
+    if (!resposta.ok) throw new Error(`Erro na API: Status ${resposta.status}`);
+
+    const dados = await parseJsonSafely(resposta);
+
+    // Suporte a dois formatos de resposta: array direto ou { route: [...] }
+    const lista = Array.isArray(dados) ? dados : (dados?.route || []);
+
+    if (lista.length > 0) {
+      const upgrade = lista[0];
+
+      // Campos do formato array direto (component, recommendation, estimatedPrice, reason)
+      if (upgrade.recommendation) {
+        resultadoDiv.innerHTML = `
+          <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
+            <h3 style="margin-top:0;color:#2e7d32;">🔥 Upgrade Recomendado: ${upgrade.component || "Componente"}</h3>
+            <h2 style="margin:10px 0;">${upgrade.recommendation}</h2>
+            <p style="font-size:18px;"><strong>Investimento estimado:</strong> R$ ${upgrade.estimatedPrice || "N/A"}</p>
+            <p style="color:#555;line-height:1.5;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
+          </div>`;
+      } else {
+        // Campos do formato { route: [{ step, action, impact }] }
+        resultadoDiv.innerHTML = `
+          <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
+            <h3 style="margin-top:0;color:#2e7d32;">🔥 Próximo Upgrade</h3>
+            <h2 style="margin:10px 0;">${upgrade.action || "N/A"}</h2>
+            <p style="font-size:18px;"><strong>Etapa:</strong> ${upgrade.step || "N/A"}</p>
+            <p style="color:#555;line-height:1.5;"><strong>Impacto:</strong> ${upgrade.impact || "Sem impacto informado."}</p>
+          </div>`;
+      }
+    } else {
+      resultadoDiv.innerHTML = "<p>Nenhuma recomendação encontrada no momento.</p>";
+    }
+
+    resultadoDiv.style.display = "block";
+  } catch (erro) {
+    console.error("[EvoluiPC] Falha ao buscar upgrade:", erro);
+    resultadoDiv.innerHTML     = `<p style="color:red;">Erro ao conectar com a API. Verifique o console (F12).</p>`;
+    resultadoDiv.style.display = "block";
+  } finally {
+    btn.textContent            = "Analisar Meu Setup 🚀";
+    btn.disabled               = false;
+    btn.style.backgroundColor  = "#4CAF50";
+  }
+}
+
+// Expõe para o onclick inline do HTML
+window.carregarRotaUpgrade = carregarRotaUpgrade;
+
+// ----------------------------------------------------------
+// Navegação por abas
+// ----------------------------------------------------------
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
-  // Controla troca de abas do painel.
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach((b)   => b.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
-
     btn.classList.add("active");
     document.getElementById(btn.dataset.tab).classList.add("active");
   });
 });
 
-// Tabs de autenticação
-
 document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
-  // Controla troca entre login e cadastro.
   btn.addEventListener("click", () => {
     clearAuthMessages();
     clearFieldValidationStates();
-
     document.querySelectorAll(".auth-tab-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".auth-form").forEach((f) => f.classList.remove("active"));
-
+    document.querySelectorAll(".auth-form").forEach((f)   => f.classList.remove("active"));
     btn.classList.add("active");
-    const tabName = btn.dataset.tab;
-    document.querySelector(`.auth-form[data-form="${tabName}"]`).classList.add("active");
+    document.querySelector(`.auth-form[data-form="${btn.dataset.tab}"]`).classList.add("active");
   });
 });
 
-// Eventos principais
+// ----------------------------------------------------------
+// Registro de eventos
+// ----------------------------------------------------------
 
-registerRealtimeValidation(authUsername, validateLoginUsername);
-// Registra validações em tempo real.
-registerRealtimeValidation(authPassword, validateLoginPassword);
-registerRealtimeValidation(regUsername, validateRegisterUsername);
-registerRealtimeValidation(regEmail, validateRegisterEmail);
-registerRealtimeValidation(regPassword, validateRegisterPassword);
+registerRealtimeValidation(authUsername,       validateLoginUsername);
+registerRealtimeValidation(authPassword,       validateLoginPassword);
+registerRealtimeValidation(regUsername,        validateRegisterUsername);
+registerRealtimeValidation(regEmail,           validateRegisterEmail);
+registerRealtimeValidation(regPassword,        validateRegisterPassword);
 registerRealtimeValidation(regPasswordConfirm, validateRegisterPasswordConfirm);
 
-loginForm.addEventListener("submit", handleLogin);
+loginForm.addEventListener("submit",    handleLogin);
 registerForm.addEventListener("submit", handleRegister);
-fetchMachineBtn.addEventListener("click", () => fetchMachineFromApi(true));
+fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
 logoutTopbarBtn.addEventListener("click", handleLogout);
-if (loginBtn) {
-  loginBtn.addEventListener("click", handleDashboardLogin);
-}
-if (registerBtn) {
-  registerBtn.addEventListener("click", handleDashboardRegister);
-}
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", handleDashboardLogout);
-}
+
 newSessionBtn.addEventListener("click", () => {
   applyPayload(structuredClone(initialState));
   saveAppState();
-  setMessage("Sessao resetada para estado N/A aguardando dados do banco.", "ok");
+  setMessage("Sessão resetada para estado N/A.", "ok");
 });
-let autoFetchInterval = null;
 
-function startAutoFetch() {
-  if (autoFetchInterval) return;
-  console.log("Auto-Refresh ativado: Aguardando dados do Scanner...");
+// ----------------------------------------------------------
+// Inicialização
+// ----------------------------------------------------------
 
-  autoFetchInterval = setInterval(async () => {
-    // Só tenta buscar se a máquina ainda estiver vazia (N/A)
-    if (state.machine.cpu === "N/A") {
-      await fetchMachineFromApi(false); // false = busca silenciosa
-      
-      if (state.machine.cpu !== "N/A") {
-        stopAutoFetch();
-        console.log("Dados detectados! Auto-refresh encerrado.");
-        setMessage("Setup detectado com sucesso!", "ok");
-      }
-    } else {
-      stopAutoFetch();
-    }
-  }, 5000); 
-}
-
-function stopAutoFetch() {
-  if (autoFetchInterval) {
-    clearInterval(autoFetchInterval);
-    autoFetchInterval = null;
-  }
-}
-// Inicialização do app
 async function initializeApp() {
-  // Inicializa dados e valida sessão.
-  const token = getStoredToken();
+  initializeSetupFlow();
 
-  authApiBase.value = getStoredApiBase();
-  engineApiBaseInput.value = getStoredEngineApiBase();
+  const token = getStoredToken();
 
   renderOverview();
   renderRoute();
@@ -1045,91 +947,26 @@ async function initializeApp() {
     }
 
     try {
-      // Tenta validar quem é o dono do Token
       const me = await apiRequest("/api/auth/me", token);
-      if (!me.user?.username) {
-        throw new Error("Sessao invalida.");
-      }
+      if (!me?.user?.username) throw new Error("Sessão inválida.");
     } catch (error) {
-      if (isNetworkFetchError(error)) {
-        setSessionInfo("Servidor reconectando... O painel será carregado com dados em cache ou vazios temporariamente.");
-        console.warn("Backend indisponível no F5, mas o token foi mantido.");
-      } else {
-        clearAuthSession();
-        setSessionInfo("Sessão expirada. Faça login novamente.");
-        showAuthScreen();
-        return;
-      }
+      clearAuthSession();
+      setSessionInfo(
+        isNetworkFetchError(error)
+          ? "Sem conexão com o backend. Faça login quando o servidor voltar."
+          : "Sessão inválida. Faça login novamente."
+      );
+      showAuthScreen();
+      return;
     }
+
     await populateDashboardFromSession();
     resetDashboardToNaState();
     showDashboardScreen();
-    fetchMachineFromApi(); 
-    
+    fetchMachineFromApi();
   } else {
     showAuthScreen();
   }
 }
-async function carregarRotaUpgrade() {
-      const btn = document.getElementById('btn-upgrade');
-      const resultadoDiv = document.getElementById('upgrade-resultado');
-
-      // Efeito visual de "Carregando"
-      btn.innerText = "Consultando Banco de Grafos...";
-      btn.disabled = true;
-      btn.style.backgroundColor = "#9e9e9e";
-
-      try {
-          // Pegamos o token com o nome correto que você encontrou
-          const token = localStorage.getItem('evoluipc.token'); 
-            
-          console.log("🕵️‍♂️ Token encontrado no navegador:", token);
-
-          // Fazemos a requisição com o token
-          const resposta = await fetch('https://evoluipc-django.onrender.com/api/upgrade-route/me', {
-              method: 'GET',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Token ${token}` // Usando o padrão 'Token'
-              }
-          });
-          
-          if (!resposta.ok) {
-              throw new Error(`Erro na API: Status ${resposta.status}`);
-          }
-
-          const dados = await resposta.json();
-
-          // Pega o primeiro item do array de recomendação (que é o Processador)
-          if (dados && dados.length > 0) {
-              const upgrade = dados[0];
-              
-              // Monta o Card HTML com os dados do Neo4j
-              resultadoDiv.innerHTML = `
-                  <div style="background-color: #f1f8e9; padding: 20px; border-radius: 8px; border-left: 5px solid #4CAF50;">
-                      <h3 style="margin-top: 0; color: #2e7d32;">🔥 Upgrade Recomendado: ${upgrade.component}</h3>
-                      <h1 style="margin: 10px 0;">${upgrade.recommendation}</h1>
-                      <p style="font-size: 18px;"><strong>Investimento Estimado:</strong> R$ ${upgrade.estimatedPrice}</p>
-                      <p style="color: #555; line-height: 1.5;"><strong>Por que?</strong> ${upgrade.reason}</p>
-                  </div>
-              `;
-              resultadoDiv.style.display = 'block'; // Mostra o card
-          } else {
-              resultadoDiv.innerHTML = "<p>Nenhuma recomendação de custo-benefício encontrada no momento.</p>";
-              resultadoDiv.style.display = 'block';
-          }
-
-      } catch (erro) {
-          console.error("Falha ao buscar upgrade:", erro);
-          resultadoDiv.innerHTML = `<p style="color: red;">Erro ao conectar com a API. Verifique o console (F12).</p>`;
-          resultadoDiv.style.display = 'block';
-      } finally {
-          // Restaura o botão ao estado original
-          btn.innerText = "Analisar Meu Setup 🚀";
-          btn.disabled = false;
-          btn.style.backgroundColor = "#4CAF50";
-      }
-}
-
 
 initializeApp();
