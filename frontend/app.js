@@ -691,7 +691,7 @@ async function fetchMachineFromApi() {
 
   try {
     const [machineData, routeData] = await Promise.all([
-      apiRequest("/api/machine/me/",       token, "GET", null, djangoBase),
+      apiRequest("/api/machine/me", token, "GET", null, djangoBase),
       apiRequest("/api/upgrade-route/me/", token, "GET", null, djangoBase),
     ]);
 
