@@ -19,59 +19,40 @@
     <div id="authScreen" class="auth-screen active">
       <div class="auth-shell">
         <section class="auth-hero">
-          <p class="eyebrow">Plataforma de evolução de hardware</p>
-          <h1>Planeje upgrades com um fluxo mais claro e profissional.</h1>
-          <p class="auth-copy">
-            EvoluiPC cruza dados do usuário, diagnóstico e catálogo para sugerir a próxima melhor peça sem telas poluídas.
-          </p>
-
-          <div class="auth-highlights">
-            <article>
-              <strong>Grafos</strong>
-              <span>compatibilidade e recomendação inteligente</span>
-            </article>
-            <article>
-              <strong>Token</strong>
-              <span>acesso rápido ao painel sem passos extras</span>
-            </article>
-            <article>
-              <strong>Fallback</strong>
-              <span>continua útil mesmo sem o Engine disponível</span>
-            </article>
+          <div class="hero-image">
+            <img src="./imagens/pexels-jonathanborba-37368180.jpg" alt="Processador com componentes" />
           </div>
-
-          <ul class="auth-points">
-            <li>Entrada mais direta, com menos ruído visual.</li>
-            <li>Interface alinhada ao restante do projeto.</li>
-            <li>Login e cadastro mais legíveis em desktop e mobile.</li>
-          </ul>
+          <h2>Evolua seu PC com inteligência</h2>
+          <p class="auth-copy">
+            Análise baseada em grafos de compatibilidade e recomendações personalizadas para otimizar seu upgrade de hardware.
+          </p>
         </section>
 
         <section class="auth-container">
           <div class="auth-header">
             <h1>EvoluiPC</h1>
-            <p class="auth-subtitle">Acesse sua conta ou crie uma nova para continuar</p>
+            <p class="auth-subtitle">Entrar ou criar conta</p>
           </div>
 
           <!-- Abas de login e cadastro -->
           <div class="auth-tabs">
             <button class="auth-tab-btn active" data-tab="login">Entrar</button>
-            <button class="auth-tab-btn" data-tab="register">Criar conta</button>
+            <button class="auth-tab-btn" data-tab="register">Registrar</button>
           </div>
 
           <!-- Formulário de login -->
           <form id="loginForm" class="auth-form active" data-form="login">
             <div class="form-group">
               <label for="authUsername">Usuário</label>
-              <input id="authUsername" type="text" placeholder="Digite seu usuário" autocomplete="username" />
+              <input id="authUsername" type="text" placeholder="Seu usuário" autocomplete="username" />
             </div>
 
             <div class="form-group">
               <label for="authPassword">Senha</label>
-              <input id="authPassword" type="password" placeholder="Digite sua senha" autocomplete="current-password" />
+              <input id="authPassword" type="password" placeholder="Sua senha" autocomplete="current-password" />
             </div>
 
-            <button type="submit" class="auth-submit-btn">Entrar</button>
+            <button type="submit" class="auth-submit-btn">Acessar plataforma</button>
             <p id="authApiError" class="auth-message error"></p>
             <p id="authLoginMessage" class="auth-message ok"></p>
           </form>
@@ -85,7 +66,7 @@
 
             <div class="form-group">
               <label for="regEmail">Email</label>
-              <input id="regEmail" type="email" placeholder="seu@email.com" autocomplete="email" />
+              <input id="regEmail" type="email" placeholder="Seu@email.com" autocomplete="email" />
             </div>
 
             <div class="form-group">
@@ -95,10 +76,10 @@
 
             <div class="form-group">
               <label for="regPasswordConfirm">Confirmar senha</label>
-              <input id="regPasswordConfirm" type="password" placeholder="Confirme sua senha" autocomplete="new-password" />
+              <input id="regPasswordConfirm" type="password" placeholder="Repita sua senha" autocomplete="new-password" />
             </div>
 
-            <button type="submit" class="auth-submit-btn">Criar conta</button>
+            <button type="submit" class="auth-submit-btn">Criar minha conta</button>
             <p id="authRegError" class="auth-message error"></p>
             <p id="authRegMessage" class="auth-message ok"></p>
           </form>
@@ -123,10 +104,41 @@
       <!-- Layout principal do painel -->
       <main class="layout">
         <aside class="side-nav">
-          <button class="tab-btn active" data-tab="overview">Visão geral</button>
-          <button class="tab-btn" data-tab="scan">Acesso por token</button>
-          <button class="tab-btn" data-tab="route">Rota de upgrade</button>
-          <button class="tab-btn" data-tab="catalog">Catálogo recomendado</button>
+          <nav class="nav-section">
+            <p class="nav-title">Painel de Controle</p>
+            <button class="tab-btn active" data-tab="overview">
+              <span class="nav-icon">📊</span>
+              <span class="nav-label">
+                <strong>Visão Geral</strong>
+                <span>Hardware atual</span>
+              </span>
+            </button>
+            <button class="tab-btn" data-tab="setup">
+              <span class="nav-icon">⚙️</span>
+              <span class="nav-label">
+                <strong>Meu Setup</strong>
+                <span>Capturar dados</span>
+              </span>
+            </button>
+          </nav>
+
+          <nav class="nav-section">
+            <p class="nav-title">Recomendações</p>
+            <button class="tab-btn" data-tab="route">
+              <span class="nav-icon">🚀</span>
+              <span class="nav-label">
+                <strong>Rota de Upgrade</strong>
+                <span>Próximos passos</span>
+              </span>
+            </button>
+            <button class="tab-btn" data-tab="catalog">
+              <span class="nav-icon">🛒</span>
+              <span class="nav-label">
+                <strong>Catálogo</strong>
+                <span>Componentes sugeridos</span>
+              </span>
+            </button>
+          </nav>
         </aside>
 
         <!-- Aba resumo da máquina -->
@@ -135,7 +147,7 @@
             <div>
               <h2>Resumo do computador</h2>
               <p class="subtitle">
-                Estado atual enviado pelo agente local para alimentar o painel e as recomendações.
+                  Dados do seu computador enviados pelo scanner local para alimentar o painel e as recomendações.
               </p>
             </div>
 
@@ -154,27 +166,79 @@
           </div>
         </section>
 
-        <!-- Aba integração com backend -->
-        <section class="panel tab-panel" id="scan">
+        <section class="panel tab-panel" id="setup">
           <div class="panel-heading compact">
             <div>
-              <h2>Acesso por token</h2>
-              <p class="subtitle">Cole o token de acesso e sincronize os dados do painel em um clique.</p>
+              <h2>Buscar dados do meu setup</h2>
+                <p class="subtitle">Copie o token abaixo, cole no Scanner e aguarde a sincronização dos dados.</p>
             </div>
-            <span class="status-pill">Fluxo simplificado</span>
           </div>
 
-          <div class="scan-card">
-            <label for="authTokenInput">Token de acesso</label>
-            <input id="authTokenInput" type="text" placeholder="Cole o token do usuário" />
-            <p class="scan-note">O painel usa automaticamente as bases do projeto. Não é preciso informar URLs aqui.</p>
+          <!-- Passo 1: Gerar e Copiar Token -->
+          <div class="token-generation-box">
+            <div class="box-header">
+              <h3>Passo 1: Copie seu token de sessão</h3>
+               <p>Esse código identifica a sua sessão no Scanner.</p>
+            </div>
+
+            <div class="generated-token-display">
+              <div class="token-value" id="sessionToken">evp_sess_a7x2k9m5pL8qR3nT6vW1jB4cD9eF2h0s</div>
+              <button id="copyTokenBtn" class="copy-btn" title="Copiar">📋 Copiar</button>
+            </div>
+            <p class="token-hint">Token gerado em tempo real • Válido para esta sessão</p>
           </div>
 
-          <div class="row-actions">
-            <button id="fetchMachineBtn" class="primary-btn">Sincronizar painel</button>
+          <!-- Passo 2: Cola no Executável -->
+          <div class="instruction-box">
+            <h3>Passo 2: Execute o Scanner</h3>
+            <ol class="instruction-list">
+              <li>Abra o <strong>EvoluiPC Scanner</strong> no seu computador</li>
+              <li>Cole o token acima no campo designado</li>
+                <li>Inicie a leitura e aguarde a atualização no painel</li>
+            </ol>
           </div>
 
-          <p id="sessionInfo" class="subtitle compact"></p>
+          <!-- Passo 3: Aguardando dados -->
+          <div class="waiting-box" id="waitingBox">
+            <div class="waiting-header">
+              <div class="loader"></div>
+              <div>
+                <h3>Aguardando dados do Scanner...</h3>
+                  <p>Deixe esta aba aberta enquanto o Scanner analisa seu hardware.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dados recebidos (sucesso) -->
+          <div id="successBox" class="success-box" style="display: none;">
+            <div class="success-header">
+              <span class="success-icon">✅</span>
+              <div>
+                <h3>Dados sincronizados com sucesso!</h3>
+                  <p>Seu hardware foi atualizado. Veja as recomendações na aba "Rota de Upgrade".</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resumo de status -->
+          <div class="status-summary">
+            <div class="summary-item">
+              <p class="summary-label">Última atualização</p>
+              <p class="summary-value" id="lastUpdate">Aguardando primeira sincronização</p>
+            </div>
+            <div class="summary-item">
+              <p class="summary-label">Status</p>
+              <p class="summary-value" id="statusIndicator">Aguardando Scanner</p>
+            </div>
+            <div class="summary-item">
+              <p class="summary-label">Computador</p>
+              <p class="summary-value" id="computerName">—</p>
+            </div>
+          </div>
+
+          <input id="authTokenInput" type="hidden" />
+          <button id="fetchMachineBtn" type="button" hidden>Buscar dados</button>
+          <p id="sessionInfo" class="message"></p>
           <p id="scanMessage" class="message"></p>
         </section>
 
