@@ -44,32 +44,56 @@ let catalogMeta = {
   count:      0,
 };
 
-// Alterna entre login e dashboard
+// ----------------------------------------------------------
+// localStorage seguro (não quebra em contextos bloqueados)
+// ----------------------------------------------------------
 
-const authScreen = document.getElementById("authScreen");
+function safeStorageGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeStorageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+function safeStorageRemove(key) {
+  try { localStorage.removeItem(key); } catch {}
+}
+
+// ----------------------------------------------------------
+// Utilitários de URL e JSON
+// ----------------------------------------------------------
+
+function sanitizeBaseUrl(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+/**
+ * Lê a resposta como texto e só faz JSON.parse se houver conteúdo.
+ * Evita "Unexpected end of JSON input" em respostas vazias.
+ */
+async function parseJsonSafely(response) {
+  const text = await response.text();
+  if (!text || !text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("[EvoluiPC] Resposta não é JSON válido:", text.slice(0, 300));
+    throw new Error("A resposta da API não veio em JSON válido.");
+  }
+}
+
+// ----------------------------------------------------------
+// Referências do DOM — autenticação
+// ----------------------------------------------------------
+
+const authScreen     = document.getElementById("authScreen");
 const dashboardScreen = document.getElementById("dashboardScreen");
-
-function showAuthScreen() {
-  // Exibe tela de autenticação.
-  authScreen.classList.add("active");
-  dashboardScreen.classList.remove("active");
-}
-
-function showDashboardScreen() {
-  // Exibe painel principal após login.
-  authScreen.classList.remove("active");
-  dashboardScreen.classList.add("active");
-}
-
-// Campos de autenticação
-
-const loginForm = document.getElementById("loginForm");
-const registerForm = document.getElementById("registerForm");
-const authUsername = document.getElementById("authUsername");
-const authPassword = document.getElementById("authPassword");
-const regUsername = document.getElementById("regUsername");
-const regEmail = document.getElementById("regEmail");
-const regPassword = document.getElementById("regPassword");
+const loginForm      = document.getElementById("loginForm");
+const registerForm   = document.getElementById("registerForm");
+const authUsername   = document.getElementById("authUsername");
+const authPassword   = document.getElementById("authPassword");
+const regUsername    = document.getElementById("regUsername");
+const regEmail       = document.getElementById("regEmail");
+const regPassword    = document.getElementById("regPassword");
 const regPasswordConfirm = document.getElementById("regPasswordConfirm");
 const authApiError   = document.getElementById("authApiError");
 const authLoginMessage = document.getElementById("authLoginMessage");
@@ -652,18 +676,16 @@ function handleLogout() {
 // ----------------------------------------------------------
 
 async function fetchMachineFromApi() {
-  // Busca dados da máquina no backend.
-  const token = authTokenInput.value.trim();
+  const token      = authTokenInput.value.trim();
   const djangoBase = sanitizeBaseUrl(getStoredApiBase().trim());
   const engineBase = sanitizeBaseUrl(getStoredEngineApiBase().trim());
 
   if (!token) {
-    setMessage("Informe o token de autenticação.", "error");
+    setMessage("Token de autenticação ausente.", "error");
     return;
   }
 
   saveApiBases(djangoBase, engineBase);
-
   fetchMachineBtn.disabled = true;
   setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
 
@@ -709,29 +731,22 @@ async function fetchMachineFromApi() {
     };
 
     applyPayload(payload);
-    setMessage(`Dados carregados com sucesso. Catalogo via ${catalogSource}.`, "ok");
+    setMessage(`Dados carregados. Catálogo via ${catalogSource}.`, "ok");
 
-    if (waitingBox) {
-      waitingBox.style.display = "none";
-    }
-
-    if (successBox) {
-      successBox.style.display = "flex";
-    }
-
+    if (waitingBox)      waitingBox.style.display  = "none";
+    if (successBox)      successBox.style.display  = "flex";
+    if (statusIndicator) statusIndicator.textContent = "Sincronizado";
     if (lastUpdate) {
       lastUpdate.textContent = new Date().toLocaleString("pt-BR", {
         dateStyle: "short",
         timeStyle: "short",
       });
     }
-
-    if (statusIndicator) {
-      statusIndicator.textContent = "Sincronizado";
-    }
-
     if (computerName) {
-      computerName.textContent = machineData.machine?.computer_name || machineData.machine?.hostname || "Setup ativo";
+      computerName.textContent =
+        machineData?.machine?.computer_name ||
+        machineData?.machine?.hostname      ||
+        "Setup ativo";
     }
   } catch (error) {
     if (isUnauthorizedError(error)) {
@@ -898,7 +913,7 @@ registerRealtimeValidation(regPasswordConfirm, validateRegisterPasswordConfirm);
 
 loginForm.addEventListener("submit",    handleLogin);
 registerForm.addEventListener("submit", handleRegister);
-fetchMachineBtn.addEventListener("click", () => fetchMachineFromApi(true));
+fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
 logoutTopbarBtn.addEventListener("click", handleLogout);
 
 newSessionBtn.addEventListener("click", () => {
@@ -907,7 +922,9 @@ newSessionBtn.addEventListener("click", () => {
   setMessage("Sessão resetada para estado N/A.", "ok");
 });
 
-// Inicialização do app
+// ----------------------------------------------------------
+// Inicialização
+// ----------------------------------------------------------
 
 async function initializeApp() {
   initializeSetupFlow();
@@ -930,16 +947,15 @@ async function initializeApp() {
     }
 
     try {
-      // Tenta validar quem é o dono do Token
       const me = await apiRequest("/api/auth/me", token);
       if (!me?.user?.username) throw new Error("Sessão inválida.");
     } catch (error) {
       clearAuthSession();
-      if (isNetworkFetchError(error)) {
-        setSessionInfo("Sem conexao com backend. Faca login quando o servidor voltar.");
-      } else {
-        setSessionInfo("Sessao invalida. Faca login novamente.");
-      }
+      setSessionInfo(
+        isNetworkFetchError(error)
+          ? "Sem conexão com o backend. Faça login quando o servidor voltar."
+          : "Sessão inválida. Faça login novamente."
+      );
       showAuthScreen();
       return;
     }
@@ -947,8 +963,7 @@ async function initializeApp() {
     await populateDashboardFromSession();
     resetDashboardToNaState();
     showDashboardScreen();
-    fetchMachineFromApi(); 
-    
+    fetchMachineFromApi();
   } else {
     showAuthScreen();
   }
