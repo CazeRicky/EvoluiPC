@@ -7,193 +7,219 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260415a" />
+    <link rel="stylesheet" href="./styles.css?v=20260513a" />
   </head>
   <body>
     <!-- Fundo visual da aplicação -->
     <div class="bg-grid"></div>
     <!-- Tela principal de autenticação -->
     <div id="authScreen" class="auth-screen active">
-      <div class="auth-container">
-        <div class="auth-header">
-          <h1>EvoluiPC</h1>
-          <p class="auth-subtitle">Planejamento Inteligente de Upgrades</p>
-        </div>
-
-        <!-- Abas de login e cadastro -->
-        <div class="auth-tabs">
-          <button class="auth-tab-btn active" data-tab="login">Entrar</button>
-          <button class="auth-tab-btn" data-tab="register">Cadastrar</button>
-        </div>
-
-        <!-- Formulário de login -->
-        <form id="loginForm" class="auth-form active" data-form="login">
-          <div class="form-group">
-            <label for="authUsername">Usuário</label>
-            <input id="authUsername" type="text" placeholder="Digite seu usuário" autocomplete="username" />
-          </div>
-
-          <div class="form-group">
-            <label for="authPassword">Senha</label>
-            <input id="authPassword" type="password" placeholder="Digite sua senha" autocomplete="current-password" />
-          </div>
-
-          <button type="submit" class="auth-submit-btn">Entrar</button>
-          <p id="authApiError" class="auth-message error"></p>
-          <p id="authLoginMessage" class="auth-message ok"></p>
-        </form>
-
-        <!-- Formulário de cadastro -->
-        <form id="registerForm" class="auth-form" data-form="register">
-          <div class="form-group">
-            <label for="regUsername">Usuário</label>
-            <input id="regUsername" type="text" placeholder="Escolha um usuário" autocomplete="username" />
-          </div>
-
-          <div class="form-group">
-            <label for="regEmail">Email</label>
-            <input id="regEmail" type="email" placeholder="seu@email.com" autocomplete="email" />
-          </div>
-
-          <div class="form-group">
-            <label for="regPassword">Senha</label>
-            <input id="regPassword" type="password" placeholder="Crie uma senha forte" autocomplete="new-password" />
-          </div>
-
-          <div class="form-group">
-            <label for="regPasswordConfirm">Confirmar Senha</label>
-            <input id="regPasswordConfirm" type="password" placeholder="Confirme sua senha" autocomplete="new-password" />
-          </div>
-
-          <button type="submit" class="auth-submit-btn">Cadastrar</button>
-          <p id="authRegError" class="auth-message error"></p>
-          <p id="authRegMessage" class="auth-message ok"></p>
-        </form>
-
-        <!-- Configuração da API local -->
-        <div class="auth-footer">
-          <p class="auth-api-config">
-            <label for="authApiBase">API Base:</label>
-            <input id="authApiBase" type="text" placeholder="Deixe em branco para autodetectar" />
+      <div class="auth-shell">
+        <section class="auth-hero">
+          <p class="eyebrow">Plataforma de evolução de hardware</p>
+          <h1>Planeje upgrades com um fluxo mais claro e profissional.</h1>
+          <p class="auth-copy">
+            EvoluiPC cruza dados do usuário, diagnóstico e catálogo para sugerir a próxima melhor peça sem telas poluídas.
           </p>
-        </div>
+
+          <div class="auth-highlights">
+            <article>
+              <strong>Grafos</strong>
+              <span>compatibilidade e recomendação inteligente</span>
+            </article>
+            <article>
+              <strong>Token</strong>
+              <span>acesso rápido ao painel sem passos extras</span>
+            </article>
+            <article>
+              <strong>Fallback</strong>
+              <span>continua útil mesmo sem o Engine disponível</span>
+            </article>
+          </div>
+
+          <ul class="auth-points">
+            <li>Entrada mais direta, com menos ruído visual.</li>
+            <li>Interface alinhada ao restante do projeto.</li>
+            <li>Login e cadastro mais legíveis em desktop e mobile.</li>
+          </ul>
+        </section>
+
+        <section class="auth-container">
+          <div class="auth-header">
+            <h1>EvoluiPC</h1>
+            <p class="auth-subtitle">Acesse sua conta ou crie uma nova para continuar</p>
+          </div>
+
+          <!-- Abas de login e cadastro -->
+          <div class="auth-tabs">
+            <button class="auth-tab-btn active" data-tab="login">Entrar</button>
+            <button class="auth-tab-btn" data-tab="register">Criar conta</button>
+          </div>
+
+          <!-- Formulário de login -->
+          <form id="loginForm" class="auth-form active" data-form="login">
+            <div class="form-group">
+              <label for="authUsername">Usuário</label>
+              <input id="authUsername" type="text" placeholder="Digite seu usuário" autocomplete="username" />
+            </div>
+
+            <div class="form-group">
+              <label for="authPassword">Senha</label>
+              <input id="authPassword" type="password" placeholder="Digite sua senha" autocomplete="current-password" />
+            </div>
+
+            <button type="submit" class="auth-submit-btn">Entrar</button>
+            <p id="authApiError" class="auth-message error"></p>
+            <p id="authLoginMessage" class="auth-message ok"></p>
+          </form>
+
+          <!-- Formulário de cadastro -->
+          <form id="registerForm" class="auth-form" data-form="register">
+            <div class="form-group">
+              <label for="regUsername">Usuário</label>
+              <input id="regUsername" type="text" placeholder="Escolha um usuário" autocomplete="username" />
+            </div>
+
+            <div class="form-group">
+              <label for="regEmail">Email</label>
+              <input id="regEmail" type="email" placeholder="seu@email.com" autocomplete="email" />
+            </div>
+
+            <div class="form-group">
+              <label for="regPassword">Senha</label>
+              <input id="regPassword" type="password" placeholder="Crie uma senha forte" autocomplete="new-password" />
+            </div>
+
+            <div class="form-group">
+              <label for="regPasswordConfirm">Confirmar senha</label>
+              <input id="regPasswordConfirm" type="password" placeholder="Confirme sua senha" autocomplete="new-password" />
+            </div>
+
+            <button type="submit" class="auth-submit-btn">Criar conta</button>
+            <p id="authRegError" class="auth-message error"></p>
+            <p id="authRegMessage" class="auth-message ok"></p>
+          </form>
+        </section>
       </div>
     </div>
 
     <!-- Dashboard após autenticação -->
     <div id="dashboardScreen" class="dashboard-screen">
       <header class="topbar">
-        <div>
+        <div class="topbar-copy">
           <p class="kicker"></p>
           <h1>EvoluiPC Control Center</h1>
+          <p class="topbar-subtitle">Visão consolidada do setup, da rota de upgrade e do catálogo recomendado.</p>
         </div>
         <div class="topbar-actions">
-          <button id="newSessionBtn" class="ghost-btn">Nova simulacao</button>
+          <button id="newSessionBtn" class="ghost-btn">Nova simulação</button>
           <button id="logoutTopbarBtn" class="ghost-btn">Sair</button>
         </div>
       </header>
 
       <!-- Layout principal do painel -->
       <main class="layout">
-      <aside class="side-nav">
-        <button class="tab-btn active" data-tab="overview">Visao geral</button>
-        <button class="tab-btn" data-tab="scan">Entrada Desktop</button>
-        <button class="tab-btn" data-tab="route">Rota de upgrade</button>
-        <button class="tab-btn" data-tab="catalog">Catalogo recomendado</button>
-      </aside>
+        <aside class="side-nav">
+          <button class="tab-btn active" data-tab="overview">Visão geral</button>
+          <button class="tab-btn" data-tab="scan">Acesso por token</button>
+          <button class="tab-btn" data-tab="route">Rota de upgrade</button>
+          <button class="tab-btn" data-tab="catalog">Catálogo recomendado</button>
+        </aside>
 
-      <!-- Aba resumo da máquina -->
-      <section class="panel tab-panel active" id="overview">
-        <h2>Resumo do computador</h2>
-        <p class="subtitle">
-          Esse painel representa o estado atual enviado pelo executavel do computador.
-        </p>
+        <!-- Aba resumo da máquina -->
+        <section class="panel tab-panel active" id="overview">
+          <div class="panel-heading">
+            <div>
+              <h2>Resumo do computador</h2>
+              <p class="subtitle">
+                Estado atual enviado pelo agente local para alimentar o painel e as recomendações.
+              </p>
+            </div>
 
-        <div style="margin: 1.5rem 0;">
-          <a href="./downloads/scanner.exe" download="Agente_EvoluiPC.exe" style="text-decoration: none;">
-            <button type="button" style="cursor: pointer; padding: 10px 20px; font-family: 'Space Grotesk', sans-serif; font-weight: bold; border-radius: 6px; border: 1px solid #444; display: flex; align-items: center; gap: 8px;">
-              📥 Baixar Agente EvoluiPC (.exe)
+            <a class="download-card" href="./downloads/scanner.exe" download="Agente_EvoluiPC.exe">
+              <span class="download-card__label">Agente local</span>
+              <strong>Baixar EvoluiPC Scanner</strong>
+              <span>Executável para atualizar o hardware automaticamente.</span>
+            </a>
+          </div>
+
+          <div class="metric-grid" id="metricGrid"></div>
+
+          <div class="status-card">
+            <h3>Diagnóstico rápido</h3>
+            <ul id="diagnosticList"></ul>
+          </div>
+        </section>
+
+        <!-- Aba integração com backend -->
+        <section class="panel tab-panel" id="scan">
+          <div class="panel-heading compact">
+            <div>
+              <h2>Acesso por token</h2>
+              <p class="subtitle">Cole o token de acesso e sincronize os dados do painel em um clique.</p>
+            </div>
+            <span class="status-pill">Fluxo simplificado</span>
+          </div>
+
+          <div class="scan-card">
+            <label for="authTokenInput">Token de acesso</label>
+            <input id="authTokenInput" type="text" placeholder="Cole o token do usuário" />
+            <p class="scan-note">O painel usa automaticamente as bases do projeto. Não é preciso informar URLs aqui.</p>
+          </div>
+
+          <div class="row-actions">
+            <button id="fetchMachineBtn" class="primary-btn">Sincronizar painel</button>
+          </div>
+
+          <p id="sessionInfo" class="subtitle compact"></p>
+          <p id="scanMessage" class="message"></p>
+        </section>
+
+        <!-- Aba rota de upgrade -->
+        <section class="panel tab-panel" id="route">
+          <div class="panel-heading compact">
+            <div>
+              <h2>Árvore de evolução</h2>
+              <p class="subtitle">Ordem sugerida de upgrade com foco em custo-benefício e compatibilidade.</p>
+            </div>
+          </div>
+
+          <ol id="upgradeRoute" class="route-list"></ol>
+
+          <div class="upgrade-card" id="secao-upgrade">
+            <div>
+              <p class="eyebrow">EvoluiPC Intelligence</p>
+              <h3>Descubra a melhor peça para o seu setup</h3>
+              <p>Uma visão guiada para priorizar upgrades com menor risco e maior ganho percebido.</p>
+            </div>
+
+            <button id="btn-upgrade" type="button" onclick="carregarRotaUpgrade()" class="primary-btn">
+              Analisar meu setup
             </button>
-          </a>
-          <p style="font-size: 0.8rem; color: #888; margin-top: 5px;">Baixe e execute o agente para atualizar seu hardware automaticamente.</p>
-        </div>
-        <div class="metric-grid" id="metricGrid"></div>
 
-        <div class="status-card">
-          <h3>Diagnostico rapido</h3>
-          <ul id="diagnosticList"></ul>
-        </div>
-      </section>
+            <div id="upgrade-resultado" class="upgrade-result" hidden></div>
+          </div>
+        </section>
 
-      <!-- Aba integração com backend -->
-      <section class="panel tab-panel" id="scan">
-        <h2>Entrada Desktop</h2>
-        <p class="subtitle">Faça login uma vez e carregue os dados salvos do usuario no Django.</p>
+        <!-- Aba catálogo de recomendações -->
+        <section class="panel tab-panel" id="catalog">
+          <div class="panel-heading compact">
+            <div>
+              <h2>Componentes recomendados</h2>
+              <p class="subtitle">Sugestões vindas do Engine Neo4j com fallback local quando necessário.</p>
+            </div>
+          </div>
 
-        <div class="scan-grid">
-          <label for="apiBaseInput">Base da API</label>
-          <input id="apiBaseInput" type="text" placeholder="Deixe em branco para autodetectar" />
+          <p id="catalogSourceInfo" class="subtitle compact">Origem do catálogo: local (ainda não sincronizado).</p>
 
-          <label for="engineApiBaseInput">Base do Engine (Neo4j)</label>
-          <input id="engineApiBaseInput" type="text" placeholder="Deixe em branco para autodetectar" />
-
-          <label for="emailInput">Email</label>
-          <input id="emailInput" type="email" placeholder="Seu email (opcional no login)" />
-
-          <label for="usernameInput">Usuario</label>
-          <input id="usernameInput" type="text" placeholder="Seu usuario" />
-
-          <label for="passwordInput">Senha</label>
-          <input id="passwordInput" type="password" placeholder="Sua senha" />
-
-          <label for="authTokenInput">Token de acesso</label>
-          <input id="authTokenInput" type="text" placeholder="Preenchido automaticamente no login" />
-        </div>
-
-        <div class="row-actions">
-          <button id="registerBtn">Cadastrar</button>
-          <button id="loginBtn">Entrar</button>
-          <button id="logoutBtn">Sair</button>
-          <button id="fetchMachineBtn">Buscar meus dados</button>
-        </div>
-
-        <p id="sessionInfo" class="subtitle compact"></p>
-        <p id="scanMessage" class="message"></p>
-      </section>
-
-      <!-- Aba rota de upgrade -->
-      <section class="panel tab-panel" id="route">
-        <h2>Arvore de evolucao</h2>
-        <p class="subtitle">Ordem sugerida de upgrade para melhor custo-beneficio.</p>
-
-        <ol id="upgradeRoute" class="route-list"></ol>
-        <!-- Área de Upgrade EvoluiPC -->
-        <div id="secao-upgrade" style="margin: 30px 0; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-          <h2>EvoluiPC: Inteligência Artificial</h2>
-          <p>Descubra a melhor peça para o seu PC focada em <strong>custo-benefício</strong>.</p>
-    
-          <button id="btn-upgrade" onclick="carregarRotaUpgrade()" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">
-          Analisar Meu Setup 🚀
-          </button>
-          <!-- É aqui dentro que o JavaScript vai injetar o resultado -->
-          <div id="upgrade-resultado" style="display: none; margin-top: 20px;"></div>
-        </div>
-      </section>
-
-      <!-- Aba catálogo de recomendações -->
-      <section class="panel tab-panel" id="catalog">
-        <h2>Componentes recomendados</h2>
-        <p class="subtitle">Dados vindos do Engine Neo4j com fallback local.</p>
-        <p id="catalogSourceInfo" class="subtitle compact">Origem do catálogo: local (ainda não sincronizado).</p>
-
-        <div id="catalogGrid" class="catalog-grid"></div>
-      </section>
+          <div id="catalogGrid" class="catalog-grid"></div>
+        </section>
       </main>
     </div>
 
-    <script src="./app.js?v=20260422c"></script>
+    <script src="./app.js?v=20260513a"></script>
   </body>
 </html>

@@ -33,6 +33,14 @@ const STORAGE_KEYS = {
   token: "evoluipc.token",
 };
 
+function getDefaultApiBase() {
+  return `${window.location.origin}/api`;
+}
+
+function getDefaultEngineApiBase() {
+  return `${window.location.origin}/engine`;
+}
+
 const state = structuredClone(initialState);
 let catalogMeta = {
   provider: "local",
@@ -60,7 +68,6 @@ function showDashboardScreen() {
 
 // Campos de autenticação
 
-const authApiBase = document.getElementById("authApiBase");
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
 const authUsername = document.getElementById("authUsername");
@@ -81,20 +88,12 @@ const diagnosticList = document.getElementById("diagnosticList");
 const routeList = document.getElementById("upgradeRoute");
 const catalogGrid = document.getElementById("catalogGrid");
 const catalogSourceInfo = document.getElementById("catalogSourceInfo");
-const apiBaseInput = document.getElementById("apiBaseInput");
-const engineApiBaseInput = document.getElementById("engineApiBaseInput");
-const emailInput = document.getElementById("emailInput");
-const usernameInput = document.getElementById("usernameInput");
-const passwordInput = document.getElementById("passwordInput");
 const authTokenInput = document.getElementById("authTokenInput");
 const sessionInfo = document.getElementById("sessionInfo");
 const scanMessage = document.getElementById("scanMessage");
 const fetchMachineBtn = document.getElementById("fetchMachineBtn");
 const newSessionBtn = document.getElementById("newSessionBtn");
 const logoutTopbarBtn = document.getElementById("logoutTopbarBtn");
-const registerBtn = document.getElementById("registerBtn");
-const loginBtn = document.getElementById("loginBtn");
-const logoutBtn = document.getElementById("logoutBtn");
 
 // Renderização principal
 
@@ -245,15 +244,17 @@ function sanitizeBaseUrl(url) {
   return url.replace(/\/+$/, "");
 }
 
-function saveAuthSession(token, username, email, apiBase) {
+function saveAuthSession(token) {
   // Salva apenas a credencial mínima para reabrir a sessão.
   localStorage.setItem(STORAGE_KEYS.token, token.trim());
-  localStorage.setItem(STORAGE_KEYS.apiBase, apiBase.trim());
 
   if (!localStorage.getItem(STORAGE_KEYS.engineApiBase)) {
-    // Use relative URL or environment-based URL
-    const engineBase = window.EVOLUIPC_ENGINE_API_BASE || (window.location.origin + '/engine');
+    const engineBase = window.EVOLUIPC_ENGINE_API_BASE || getDefaultEngineApiBase();
     localStorage.setItem(STORAGE_KEYS.engineApiBase, engineBase);
+  }
+
+  if (!localStorage.getItem(STORAGE_KEYS.apiBase)) {
+    localStorage.setItem(STORAGE_KEYS.apiBase, getDefaultApiBase());
   }
 }
 
@@ -302,12 +303,12 @@ function getStoredToken() {
 
 function getStoredApiBase() {
   // Lê base da API salva.
-  return localStorage.getItem(STORAGE_KEYS.apiBase) || (window.location.origin + '/api');
+  return localStorage.getItem(STORAGE_KEYS.apiBase) || getDefaultApiBase();
 }
 
 function getStoredEngineApiBase() {
   // Lê base do engine salva.
-  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || (window.location.origin + '/engine');
+  return localStorage.getItem(STORAGE_KEYS.engineApiBase) || getDefaultEngineApiBase();
 }
 
 // Mensagens de validação
@@ -526,7 +527,7 @@ function registerRealtimeValidation(input, validator) {
 
 async function apiRequest(path, token, method = "GET", payload = null, baseUrlOverride = null) {
   // Faz requisição HTTP para API.
-  const baseUrl = sanitizeBaseUrl((baseUrlOverride || authApiBase.value || "").trim());
+  const baseUrl = sanitizeBaseUrl((baseUrlOverride || getStoredApiBase()).trim());
   const headers = {
     "Content-Type": "application/json",
   };
@@ -625,12 +626,7 @@ async function handleRegister(event) {
       password,
     });
 
-    saveAuthSession(
-      registerData.token,
-      registerData.user.username,
-      registerData.user.email || "",
-      authApiBase.value
-    );
+    saveAuthSession(registerData.token);
 
     showAuthSuccess(`Conta criada com sucesso! Bem-vindo, ${registerData.user.username}!`);
 
@@ -658,8 +654,6 @@ async function populateDashboardFromSession() {
   // Preenche painel com a sessão ativa consultando o backend.
   const token = getStoredToken();
 
-  apiBaseInput.value = getStoredApiBase();
-  engineApiBaseInput.value = getStoredEngineApiBase();
   authTokenInput.value = token;
 
   if (!token) {
@@ -669,12 +663,8 @@ async function populateDashboardFromSession() {
 
   try {
     const me = await apiRequest("/api/auth/me", token);
-    usernameInput.value = me.user?.username || "";
-    emailInput.value = me.user?.email || "";
     setSessionInfo(`Autenticado como ${me.user?.username || "usuário"}.`);
   } catch {
-    usernameInput.value = "";
-    emailInput.value = "";
     setSessionInfo("Sessão ativa, aguardando leitura do perfil.");
   }
 }
@@ -690,6 +680,7 @@ function resetDashboardToNaState() {
 
 function handleLogout() {
   // Encerra sessão do usuário.
+  stopAutoFetch();
   localStorage.removeItem(getAppStateStorageKey());
   clearAuthSession();
   clearAuthMessages();
@@ -700,119 +691,10 @@ function handleLogout() {
   regEmail.value = "";
   regPassword.value = "";
   regPasswordConfirm.value = "";
+  authTokenInput.value = "";
 
   showAuthScreen();
   setSessionInfo("Sessão encerrada.");
-}
-
-async function handleDashboardLogin() {
-  // Login direto pela aba Entrada Desktop para trocar de usuário rapidamente.
-  const username = (usernameInput.value || "").trim();
-  const password = passwordInput.value || "";
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-
-  if (!username || !password) {
-    setMessage("Informe usuario e senha para entrar.", "error");
-    return;
-  }
-
-  loginBtn.disabled = true;
-  setMessage("Autenticando usuario...", "ok");
-
-  try {
-    const loginData = await apiRequest(
-      "/api/auth/login",
-      null,
-      "POST",
-      {
-        username,
-        password,
-      },
-      djangoBase
-    );
-
-    saveAuthSession(loginData.token, loginData.user.username, loginData.user.email || "", djangoBase);
-    await populateDashboardFromSession();
-    resetDashboardToNaState();
-    await fetchMachineFromApi();
-    setMessage(`Sessao atualizada para ${loginData.user.username}.`, "ok");
-  } catch (error) {
-    setMessage(error.message || "Falha no login pela Entrada Desktop.", "error");
-  } finally {
-    loginBtn.disabled = false;
-  }
-}
-
-async function handleDashboardRegister() {
-  // Cadastro direto pela aba Entrada Desktop.
-  const username = (usernameInput.value || "").trim();
-  const email = (emailInput.value || "").trim();
-  const password = passwordInput.value || "";
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-
-  if (!username || !password) {
-    setMessage("Informe usuario e senha para cadastrar.", "error");
-    return;
-  }
-
-  registerBtn.disabled = true;
-  setMessage("Criando conta...", "ok");
-
-  try {
-    const registerData = await apiRequest(
-      "/api/auth/register",
-      null,
-      "POST",
-      {
-        username,
-        email,
-        password,
-      },
-      djangoBase
-    );
-
-    saveAuthSession(registerData.token, registerData.user.username, registerData.user.email || "", djangoBase);
-    await populateDashboardFromSession();
-    resetDashboardToNaState();
-    await fetchMachineFromApi();
-    setMessage(`Conta criada e autenticada como ${registerData.user.username}.`, "ok");
-  } catch (error) {
-    setMessage(error.message || "Falha no cadastro pela Entrada Desktop.", "error");
-  } finally {
-    registerBtn.disabled = false;
-  }
-}
-
-async function handleDashboardLogout() {
-  // Logout pela aba Entrada Desktop sem sair para a tela de autenticação.
-  const token = (authTokenInput.value || "").trim() || getStoredToken();
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-
-  logoutBtn.disabled = true;
-  try {
-    if (token) {
-      await apiRequest("/api/auth/logout", token, "POST", null, djangoBase);
-    }
-  } catch {
-    // Se o token ja expirou, seguimos limpando a sessao local.
-  } finally {
-    localStorage.removeItem(getAppStateStorageKey());
-    clearAuthSession();
-    authTokenInput.value = "";
-    usernameInput.value = "";
-    emailInput.value = "";
-    passwordInput.value = "";
-    state.machine = structuredClone(DEFAULT_MACHINE_STATE);
-    state.diagnostics = structuredClone(DEFAULT_DIAGNOSTICS);
-    state.route = structuredClone(DEFAULT_ROUTE);
-    state.catalog = [];
-    renderOverview();
-    renderRoute();
-    renderCatalog();
-    setSessionInfo("Sem sessao ativa.");
-    setMessage("Sessao encerrada na Entrada Desktop.", "ok");
-    logoutBtn.disabled = false;
-  }
 }
 
 // Dados do dashboard
@@ -820,8 +702,8 @@ async function handleDashboardLogout() {
 async function fetchMachineFromApi() {
   // Busca dados da máquina no backend.
   const token = authTokenInput.value.trim();
-  const djangoBase = sanitizeBaseUrl((apiBaseInput.value || getStoredApiBase()).trim());
-  const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
+  const djangoBase = sanitizeBaseUrl(getStoredApiBase().trim());
+  const engineBase = sanitizeBaseUrl(getStoredEngineApiBase().trim());
 
   if (!token) {
     setMessage("Informe o token de autenticação.", "error");
@@ -879,6 +761,7 @@ async function fetchMachineFromApi() {
     setMessage(`Dados carregados com sucesso. Catalogo via ${catalogSource}.`, "ok");
   } catch (error) {
     if (isUnauthorizedError(error)) {
+      stopAutoFetch();
       clearAuthSession();
       showAuthScreen();
       setMessage("Sessao expirada. Faca login novamente.", "error");
@@ -909,7 +792,7 @@ async function fetchMachineFromApi() {
 
 async function syncCatalogFromEngineOnLoad() {
   // Sincroniza catálogo do Engine sem depender do login.
-  const engineBase = sanitizeBaseUrl((engineApiBaseInput.value || getStoredEngineApiBase()).trim());
+  const engineBase = sanitizeBaseUrl(getStoredEngineApiBase().trim());
   setCatalogSourceInfo(`Sincronizando catálogo com ${engineBase}...`, "");
 
   try {
@@ -976,15 +859,6 @@ loginForm.addEventListener("submit", handleLogin);
 registerForm.addEventListener("submit", handleRegister);
 fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
 logoutTopbarBtn.addEventListener("click", handleLogout);
-if (loginBtn) {
-  loginBtn.addEventListener("click", handleDashboardLogin);
-}
-if (registerBtn) {
-  registerBtn.addEventListener("click", handleDashboardRegister);
-}
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", handleDashboardLogout);
-}
 newSessionBtn.addEventListener("click", () => {
   applyPayload(structuredClone(initialState));
   saveAppState();
@@ -996,9 +870,6 @@ newSessionBtn.addEventListener("click", () => {
 async function initializeApp() {
   // Inicializa dados e valida sessão.
   const token = getStoredToken();
-
-  authApiBase.value = getStoredApiBase();
-  engineApiBaseInput.value = getStoredEngineApiBase();
 
   renderOverview();
   renderRoute();
