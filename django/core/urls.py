@@ -20,13 +20,9 @@ from .views import (
 def home(request):
     return JsonResponse({"status": "ok", "service": "evoluipc-django"})
 
-urlpatterns = [
-    path("", home),
-    path("api/", include("core.urls")),
-]
-
 # Rotas publicas e autenticadas da API.
 urlpatterns = [
+    path("", home),
     path("auth/register", RegisterView.as_view(), name="auth-register"),
     path("auth/login", LoginView.as_view(), name="auth-login"),
     path("auth/me", AuthMeView.as_view(), name="auth-me"),

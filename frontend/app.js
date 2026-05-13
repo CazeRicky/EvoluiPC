@@ -91,11 +91,76 @@ const routeList = document.getElementById("upgradeRoute");
 const catalogGrid = document.getElementById("catalogGrid");
 const catalogSourceInfo = document.getElementById("catalogSourceInfo");
 const authTokenInput = document.getElementById("authTokenInput");
+const sessionTokenDisplay = document.getElementById("sessionToken");
+const copyTokenBtn = document.getElementById("copyTokenBtn");
+const waitingBox = document.getElementById("waitingBox");
+const successBox = document.getElementById("successBox");
+const lastUpdate = document.getElementById("lastUpdate");
+const statusIndicator = document.getElementById("statusIndicator");
+const computerName = document.getElementById("computerName");
 const sessionInfo = document.getElementById("sessionInfo");
 const scanMessage = document.getElementById("scanMessage");
 const fetchMachineBtn = document.getElementById("fetchMachineBtn");
 const newSessionBtn = document.getElementById("newSessionBtn");
 const logoutTopbarBtn = document.getElementById("logoutTopbarBtn");
+
+function generateSessionToken() {
+  // Gera um token visual para a sessão do usuário.
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let token = "evp_sess_";
+
+  for (let index = 0; index < 32; index += 1) {
+    token += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  }
+
+  return token;
+}
+
+function initializeSetupFlow() {
+  // Prepara a tela de setup com token gerado e cópia rápida.
+  if (!sessionTokenDisplay || !copyTokenBtn || !authTokenInput) {
+    return;
+  }
+
+  const sessionToken = generateSessionToken();
+  sessionTokenDisplay.textContent = sessionToken;
+  authTokenInput.value = sessionToken;
+
+  copyTokenBtn.addEventListener("click", async () => {
+    authTokenInput.value = sessionToken;
+
+    try {
+      await navigator.clipboard.writeText(sessionToken);
+      copyTokenBtn.textContent = "✅ Copiado!";
+    } catch {
+      copyTokenBtn.textContent = "Token pronto";
+    }
+
+    if (waitingBox) {
+      waitingBox.style.display = "flex";
+    }
+
+    if (successBox) {
+      successBox.style.display = "none";
+    }
+
+    if (lastUpdate) {
+      lastUpdate.textContent = "Sincronizando...";
+    }
+
+    if (statusIndicator) {
+      statusIndicator.textContent = "Aguardando resposta";
+    }
+
+    setTimeout(() => {
+      fetchMachineFromApi();
+    }, 1200);
+
+    setTimeout(() => {
+      copyTokenBtn.textContent = "📋 Copiar";
+    }, 2000);
+  });
+}
 
 // Renderização principal
 
@@ -195,12 +260,22 @@ function applyPayload(payload) {
 
 function setMessage(text, type) {
   // Exibe mensagens do painel.
+  if (!scanMessage) {
+    return;
+  }
+
+  scanMessage.hidden = false;
   scanMessage.textContent = text;
   scanMessage.className = `message ${type}`;
 }
 
 function setSessionInfo(text) {
   // Exibe resumo da sessão atual.
+  if (!sessionInfo) {
+    return;
+  }
+
+  sessionInfo.hidden = false;
   sessionInfo.textContent = text;
 }
 
@@ -790,6 +865,14 @@ async function fetchMachineFromApi(isManual = true) {
     }
 
     setMessage(error.message || "Erro ao consultar API.", "error");
+
+    if (waitingBox) {
+      waitingBox.style.display = "flex";
+    }
+
+    if (successBox) {
+      successBox.style.display = "none";
+    }
   } finally {
     fetchMachineBtn.disabled = false;
   }
@@ -900,6 +983,7 @@ function stopAutoFetch() {
 // Inicialização do app
 async function initializeApp() {
   // Inicializa dados e valida sessão.
+  initializeSetupFlow();
   const token = getStoredToken();
 
   renderOverview();
