@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  tests:
+    image: alpine:latest
+    container_name: evoluipc-tests
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      engine:
+        condition: service_healthy
+      django:
+        condition: service_healthy
+    environment:
+      DJANGO_URL: http://django:8000
+      ENGINE_URL: http://engine:8002
+    volumes:
+      - ./tests.sh:/tests.sh
+    command: sh -c "apk add --no-cache curl netcat-openbsd && sh /tests.sh"
+    networks:
+      - default
+
+networks:
+  default:
+    name: evoluipc-network
