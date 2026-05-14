@@ -44,9 +44,9 @@ let catalogMeta = {
   count:      0,
 };
 
-// ----------------------------------------------------------
+
 // localStorage seguro (não quebra em contextos bloqueados)
-// ----------------------------------------------------------
+
 
 function safeStorageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -58,9 +58,9 @@ function safeStorageRemove(key) {
   try { localStorage.removeItem(key); } catch {}
 }
 
-// ----------------------------------------------------------
+
 // Utilitários de URL e JSON
-// ----------------------------------------------------------
+
 
 function sanitizeBaseUrl(url) {
   return String(url || "").replace(/\/+$/, "");
@@ -81,9 +81,9 @@ async function parseJsonSafely(response) {
   }
 }
 
-// ----------------------------------------------------------
+
 // Referências do DOM — autenticação
-// ----------------------------------------------------------
+
 
 const authScreen     = document.getElementById("authScreen");
 const dashboardScreen = document.getElementById("dashboardScreen");
@@ -100,9 +100,9 @@ const authLoginMessage = document.getElementById("authLoginMessage");
 const authRegError   = document.getElementById("authRegError");
 const authRegMessage = document.getElementById("authRegMessage");
 
-// ----------------------------------------------------------
+
 // Referências do DOM — dashboard
-// ----------------------------------------------------------
+
 
 const metricGrid        = document.getElementById("metricGrid");
 const diagnosticList    = document.getElementById("diagnosticList");
@@ -123,9 +123,9 @@ const fetchMachineBtn   = document.getElementById("fetchMachineBtn");
 const newSessionBtn     = document.getElementById("newSessionBtn");
 const logoutTopbarBtn   = document.getElementById("logoutTopbarBtn");
 
-// ----------------------------------------------------------
+
 // Alternância de telas
-// ----------------------------------------------------------
+
 
 function showAuthScreen() {
   authScreen.classList.add("active");
@@ -137,9 +137,9 @@ function showDashboardScreen() {
   dashboardScreen.classList.add("active");
 }
 
-// ----------------------------------------------------------
+
 // Geração de token de sessão para o Scanner
-// ----------------------------------------------------------
+
 
 function generateSessionToken() {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -186,9 +186,9 @@ function initializeSetupFlow() {
   };
 }
 
-// ----------------------------------------------------------
+
 // Renderização
-// ----------------------------------------------------------
+
 
 function renderOverview() {
   metricGrid.innerHTML = "";
@@ -281,9 +281,9 @@ function applyPayload(payload) {
   saveAppState();
 }
 
-// ----------------------------------------------------------
+
 // Mensagens de UI
-// ----------------------------------------------------------
+
 
 function setMessage(text, type) {
   if (!scanMessage) return;
@@ -306,9 +306,9 @@ function setCatalogSourceInfo(text, status = "") {
   if (status === "error") catalogSourceInfo.classList.add("source-info-error");
 }
 
-// ----------------------------------------------------------
+
 // Sessão e armazenamento
-// ----------------------------------------------------------
+
 
 function getStoredToken()          { return safeStorageGet(STORAGE_KEYS.token); }
 function getStoredApiBase()        { return safeStorageGet(STORAGE_KEYS.apiBase)       || getDefaultApiBase(); }
@@ -340,9 +340,9 @@ function saveAppState()          {}
 function loadAppState()          { return false; }
 function stopAutoFetch()         {}
 
-// ----------------------------------------------------------
+
 // Detecção de erros
-// ----------------------------------------------------------
+
 
 function isNetworkFetchError(error) {
   const m = String(error?.message || "").toLowerCase();
@@ -363,9 +363,9 @@ function isUnauthorizedError(error) {
   );
 }
 
-// ----------------------------------------------------------
+
 // Mensagens de autenticação
-// ----------------------------------------------------------
+
 
 function clearAuthMessages() {
   [authApiError, authLoginMessage, authRegError, authRegMessage].forEach((el) => {
@@ -386,9 +386,9 @@ function showAuthSuccess(message, isRegister = false) {
   el.classList.add("show");
 }
 
-// ----------------------------------------------------------
+
 // Validação de campos
-// ----------------------------------------------------------
+
 
 function getFieldErrorElement(input) {
   let el = input.parentElement.querySelector(".field-error");
@@ -509,9 +509,9 @@ function registerRealtimeValidation(input, validator) {
   });
 }
 
-// ----------------------------------------------------------
+
 // Requisições HTTP
-// ----------------------------------------------------------
+
 
 async function apiRequest(path, token, method = "GET", payload = null, baseUrlOverride = null) {
   const baseUrl = sanitizeBaseUrl((baseUrlOverride || getStoredApiBase()).trim());
@@ -553,9 +553,9 @@ async function fetchCatalogFromEngine(engineBase) {
   return await parseJsonSafely(response);
 }
 
-// ----------------------------------------------------------
+
 // Fluxo de autenticação
-// ----------------------------------------------------------
+
 
 async function handleLogin(event) {
   event.preventDefault();
@@ -682,9 +682,9 @@ function handleLogout() {
   setSessionInfo("Sessão encerrada.");
 }
 
-// ----------------------------------------------------------
+
 // Dados do dashboard
-// ----------------------------------------------------------
+
 
 async function fetchMachineFromApi() {
   const token      = authTokenInput.value.trim();
@@ -807,9 +807,9 @@ async function syncCatalogFromEngineOnLoad() {
   }
 }
 
-// ----------------------------------------------------------
+
 // Rota de upgrade (botão "Analisar meu setup")
-// ----------------------------------------------------------
+
 
 async function carregarRotaUpgrade() {
   const btn         = document.getElementById("btn-upgrade");
@@ -887,9 +887,9 @@ async function carregarRotaUpgrade() {
 // Expõe para o onclick inline do HTML
 window.carregarRotaUpgrade = carregarRotaUpgrade;
 
-// ----------------------------------------------------------
+
 // Navegação por abas
-// ----------------------------------------------------------
+
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -911,9 +911,9 @@ document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
   });
 });
 
-// ----------------------------------------------------------
+
 // Registro de eventos
-// ----------------------------------------------------------
+
 
 registerRealtimeValidation(authUsername,       validateLoginUsername);
 registerRealtimeValidation(authPassword,       validateLoginPassword);
@@ -933,9 +933,9 @@ newSessionBtn.addEventListener("click", () => {
   setMessage("Sessão resetada para estado N/A.", "ok");
 });
 
-// ----------------------------------------------------------
+
 // Inicialização
-// ----------------------------------------------------------
+
 
 async function initializeApp() {
   initializeSetupFlow();
