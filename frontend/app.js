@@ -1,4 +1,3 @@
-
 const DEFAULT_MACHINE_STATE = {
   cpu: "N/A",
   gpu: "N/A",
@@ -44,9 +43,32 @@ let catalogMeta = {
   count:      0,
 };
 
-// ----------------------------------------------------------
+let autoFetchInterval = null;
+
+function startAutoFetch() {
+  if (autoFetchInterval) return;
+  
+  autoFetchInterval = setInterval(async () => {
+    if (state.machine.cpu === "N/A") {
+      await fetchMachineFromApi(false);
+      if (state.machine.cpu !== "N/A") {
+        stopAutoFetch();
+        setMessage("Setup detectado com sucesso!", "ok");
+      }
+    } else {
+      stopAutoFetch();
+    }
+  }, 5000); 
+}
+
+function stopAutoFetch() {
+  if (autoFetchInterval) {
+    clearInterval(autoFetchInterval);
+    autoFetchInterval = null;
+  }
+}
+
 // localStorage seguro (não quebra em contextos bloqueados)
-// ----------------------------------------------------------
 
 function safeStorageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -58,9 +80,7 @@ function safeStorageRemove(key) {
   try { localStorage.removeItem(key); } catch {}
 }
 
-// ----------------------------------------------------------
 // Utilitários de URL e JSON
-// ----------------------------------------------------------
 
 function sanitizeBaseUrl(url) {
   return String(url || "").replace(/\/+$/, "");
@@ -81,9 +101,7 @@ async function parseJsonSafely(response) {
   }
 }
 
-// ----------------------------------------------------------
 // Referências do DOM — autenticação
-// ----------------------------------------------------------
 
 const authScreen     = document.getElementById("authScreen");
 const dashboardScreen = document.getElementById("dashboardScreen");
@@ -100,9 +118,7 @@ const authLoginMessage = document.getElementById("authLoginMessage");
 const authRegError   = document.getElementById("authRegError");
 const authRegMessage = document.getElementById("authRegMessage");
 
-// ----------------------------------------------------------
 // Referências do DOM — dashboard
-// ----------------------------------------------------------
 
 const metricGrid        = document.getElementById("metricGrid");
 const diagnosticList    = document.getElementById("diagnosticList");
@@ -123,9 +139,7 @@ const fetchMachineBtn   = document.getElementById("fetchMachineBtn");
 const newSessionBtn     = document.getElementById("newSessionBtn");
 const logoutTopbarBtn   = document.getElementById("logoutTopbarBtn");
 
-// ----------------------------------------------------------
 // Alternância de telas
-// ----------------------------------------------------------
 
 function showAuthScreen() {
   authScreen.classList.add("active");
@@ -135,11 +149,10 @@ function showAuthScreen() {
 function showDashboardScreen() {
   authScreen.classList.remove("active");
   dashboardScreen.classList.add("active");
+  startAutoFetch();
 }
 
-// ----------------------------------------------------------
 // Geração de token de sessão para o Scanner
-// ----------------------------------------------------------
 
 function generateSessionToken() {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -153,33 +166,40 @@ function generateSessionToken() {
 function initializeSetupFlow() {
   if (!sessionTokenDisplay || !copyTokenBtn || !authTokenInput) return;
 
-  const sessionToken = generateSessionToken();
-  sessionTokenDisplay.textContent = sessionToken;
-  authTokenInput.value = sessionToken;
+  const authToken = getStoredToken();
 
-  copyTokenBtn.addEventListener("click", async () => {
-    authTokenInput.value = sessionToken;
+  if (!authToken) {
+    sessionTokenDisplay.textContent = "Faça login para gerar o token";
+    authTokenInput.value = "";
+    return;
+  }
+
+  sessionTokenDisplay.textContent = authToken;
+  authTokenInput.value = authToken;
+
+  copyTokenBtn.onclick = async () => {
+    authTokenInput.value = authToken;
 
     try {
-      await navigator.clipboard.writeText(sessionToken);
+      await navigator.clipboard.writeText(authToken);
       copyTokenBtn.textContent = "✅ Copiado!";
     } catch {
       copyTokenBtn.textContent = "Token pronto";
     }
 
-    if (waitingBox)      waitingBox.style.display  = "flex";
-    if (successBox)      successBox.style.display  = "none";
-    if (lastUpdate)      lastUpdate.textContent     = "Sincronizando...";
+    if (waitingBox) waitingBox.style.display = "flex";
+    if (successBox) successBox.style.display = "none";
+    if (lastUpdate) lastUpdate.textContent = "Sincronizando...";
     if (statusIndicator) statusIndicator.textContent = "Aguardando resposta";
 
-    setTimeout(() => fetchMachineFromApi(), 1200);
-    setTimeout(() => { copyTokenBtn.textContent = "📋 Copiar"; }, 2000);
-  });
+    setTimeout(() => fetchMachineFromApi(true), 1200);
+    setTimeout(() => {
+      copyTokenBtn.textContent = "📋 Copiar";
+    }, 2000);
+  };
 }
 
-// ----------------------------------------------------------
 // Renderização
-// ----------------------------------------------------------
 
 function renderOverview() {
   metricGrid.innerHTML = "";
@@ -272,9 +292,7 @@ function applyPayload(payload) {
   saveAppState();
 }
 
-// ----------------------------------------------------------
 // Mensagens de UI
-// ----------------------------------------------------------
 
 function setMessage(text, type) {
   if (!scanMessage) return;
@@ -297,9 +315,7 @@ function setCatalogSourceInfo(text, status = "") {
   if (status === "error") catalogSourceInfo.classList.add("source-info-error");
 }
 
-// ----------------------------------------------------------
 // Sessão e armazenamento
-// ----------------------------------------------------------
 
 function getStoredToken()          { return safeStorageGet(STORAGE_KEYS.token); }
 function getStoredApiBase()        { return safeStorageGet(STORAGE_KEYS.apiBase)       || getDefaultApiBase(); }
@@ -329,11 +345,8 @@ function saveApiBases(djangoBase, engineBase) {
 function getAppStateStorageKey() { return "evoluipc.appState"; }
 function saveAppState()          {}
 function loadAppState()          { return false; }
-function stopAutoFetch()         {}
 
-// ----------------------------------------------------------
 // Detecção de erros
-// ----------------------------------------------------------
 
 function isNetworkFetchError(error) {
   const m = String(error?.message || "").toLowerCase();
@@ -354,9 +367,7 @@ function isUnauthorizedError(error) {
   );
 }
 
-// ----------------------------------------------------------
 // Mensagens de autenticação
-// ----------------------------------------------------------
 
 function clearAuthMessages() {
   [authApiError, authLoginMessage, authRegError, authRegMessage].forEach((el) => {
@@ -377,9 +388,7 @@ function showAuthSuccess(message, isRegister = false) {
   el.classList.add("show");
 }
 
-// ----------------------------------------------------------
 // Validação de campos
-// ----------------------------------------------------------
 
 function getFieldErrorElement(input) {
   let el = input.parentElement.querySelector(".field-error");
@@ -500,9 +509,7 @@ function registerRealtimeValidation(input, validator) {
   });
 }
 
-// ----------------------------------------------------------
 // Requisições HTTP
-// ----------------------------------------------------------
 
 async function apiRequest(path, token, method = "GET", payload = null, baseUrlOverride = null) {
   const baseUrl = sanitizeBaseUrl((baseUrlOverride || getStoredApiBase()).trim());
@@ -544,9 +551,7 @@ async function fetchCatalogFromEngine(engineBase) {
   return await parseJsonSafely(response);
 }
 
-// ----------------------------------------------------------
 // Fluxo de autenticação
-// ----------------------------------------------------------
 
 async function handleLogin(event) {
   event.preventDefault();
@@ -568,6 +573,7 @@ async function handleLogin(event) {
     if (!data?.token) throw new Error("Login não retornou token. Verifique o backend.");
 
     saveAuthSession(data.token);
+    initializeSetupFlow();
     showAuthSuccess(`Bem-vindo, ${data.user?.username || username}! Redirecionando...`);
 
     setTimeout(async () => {
@@ -609,6 +615,7 @@ async function handleRegister(event) {
     if (!data?.token) throw new Error("Cadastro não retornou token. Verifique o backend.");
 
     saveAuthSession(data.token);
+    initializeSetupFlow();
     showAuthSuccess(`Conta criada com sucesso! Bem-vindo, ${data.user?.username || username}!`, true);
 
     setTimeout(async () => {
@@ -671,23 +678,24 @@ function handleLogout() {
   setSessionInfo("Sessão encerrada.");
 }
 
-// ----------------------------------------------------------
 // Dados do dashboard
-// ----------------------------------------------------------
 
-async function fetchMachineFromApi() {
+async function fetchMachineFromApi(isManual = true) {
   const token      = authTokenInput.value.trim();
   const djangoBase = sanitizeBaseUrl(getStoredApiBase().trim());
   const engineBase = sanitizeBaseUrl(getStoredEngineApiBase().trim());
 
   if (!token) {
-    setMessage("Token de autenticação ausente.", "error");
+    if (isManual) setMessage("Token de autenticação ausente.", "error");
     return;
   }
 
   saveApiBases(djangoBase, engineBase);
-  fetchMachineBtn.disabled = true;
-  setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
+  
+  if (isManual) {
+    fetchMachineBtn.disabled = true;
+    setMessage("Buscando dados no backend e no Engine Neo4j...", "ok");
+  }
 
   try {
     const [machineData, routeData] = await Promise.all([
@@ -731,7 +739,8 @@ async function fetchMachineFromApi() {
     };
 
     applyPayload(payload);
-    setMessage(`Dados carregados. Catálogo via ${catalogSource}.`, "ok");
+    
+    if (isManual) setMessage(`Dados carregados. Catálogo via ${catalogSource}.`, "ok");
 
     if (waitingBox)      waitingBox.style.display  = "none";
     if (successBox)      successBox.style.display  = "flex";
@@ -796,9 +805,7 @@ async function syncCatalogFromEngineOnLoad() {
   }
 }
 
-// ----------------------------------------------------------
 // Rota de upgrade (botão "Analisar meu setup")
-// ----------------------------------------------------------
 
 async function carregarRotaUpgrade() {
   const btn         = document.getElementById("btn-upgrade");
@@ -832,13 +839,11 @@ async function carregarRotaUpgrade() {
 
     const dados = await parseJsonSafely(resposta);
 
-    // Suporte a dois formatos de resposta: array direto ou { route: [...] }
     const lista = Array.isArray(dados) ? dados : (dados?.route || []);
 
     if (lista.length > 0) {
       const upgrade = lista[0];
 
-      // Campos do formato array direto (component, recommendation, estimatedPrice, reason)
       if (upgrade.recommendation) {
         resultadoDiv.innerHTML = `
           <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
@@ -848,7 +853,6 @@ async function carregarRotaUpgrade() {
             <p style="color:#555;line-height:1.5;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
           </div>`;
       } else {
-        // Campos do formato { route: [{ step, action, impact }] }
         resultadoDiv.innerHTML = `
           <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
             <h3 style="margin-top:0;color:#2e7d32;">🔥 Próximo Upgrade</h3>
@@ -874,11 +878,10 @@ async function carregarRotaUpgrade() {
 }
 
 // Expõe para o onclick inline do HTML
+
 window.carregarRotaUpgrade = carregarRotaUpgrade;
 
-// ----------------------------------------------------------
 // Navegação por abas
-// ----------------------------------------------------------
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -900,9 +903,7 @@ document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
   });
 });
 
-// ----------------------------------------------------------
 // Registro de eventos
-// ----------------------------------------------------------
 
 registerRealtimeValidation(authUsername,       validateLoginUsername);
 registerRealtimeValidation(authPassword,       validateLoginPassword);
@@ -913,7 +914,7 @@ registerRealtimeValidation(regPasswordConfirm, validateRegisterPasswordConfirm);
 
 loginForm.addEventListener("submit",    handleLogin);
 registerForm.addEventListener("submit", handleRegister);
-fetchMachineBtn.addEventListener("click", fetchMachineFromApi);
+fetchMachineBtn.addEventListener("click", () => fetchMachineFromApi(true));
 logoutTopbarBtn.addEventListener("click", handleLogout);
 
 newSessionBtn.addEventListener("click", () => {
@@ -922,9 +923,7 @@ newSessionBtn.addEventListener("click", () => {
   setMessage("Sessão resetada para estado N/A.", "ok");
 });
 
-// ----------------------------------------------------------
 // Inicialização
-// ----------------------------------------------------------
 
 async function initializeApp() {
   initializeSetupFlow();
@@ -950,14 +949,15 @@ async function initializeApp() {
       const me = await apiRequest("/api/auth/me", token);
       if (!me?.user?.username) throw new Error("Sessão inválida.");
     } catch (error) {
-      clearAuthSession();
-      setSessionInfo(
-        isNetworkFetchError(error)
-          ? "Sem conexão com o backend. Faça login quando o servidor voltar."
-          : "Sessão inválida. Faça login novamente."
-      );
-      showAuthScreen();
-      return;
+      if (isNetworkFetchError(error)) {
+        setSessionInfo("Servidor reconectando... O painel será carregado temporariamente.");
+        console.warn("Backend indisponível no F5, mas o token foi mantido.");
+      } else {
+        clearAuthSession();
+        setSessionInfo("Sessão expirada. Faça login novamente.");
+        showAuthScreen();
+        return;
+      }
     }
 
     await populateDashboardFromSession();
