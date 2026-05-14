@@ -153,28 +153,37 @@ function generateSessionToken() {
 function initializeSetupFlow() {
   if (!sessionTokenDisplay || !copyTokenBtn || !authTokenInput) return;
 
-  const sessionToken = generateSessionToken();
-  sessionTokenDisplay.textContent = sessionToken;
-  authTokenInput.value = sessionToken;
+  const authToken = getStoredToken();
 
-  copyTokenBtn.addEventListener("click", async () => {
-    authTokenInput.value = sessionToken;
+  if (!authToken) {
+    sessionTokenDisplay.textContent = "Faça login para gerar o token";
+    authTokenInput.value = "";
+    return;
+  }
+
+  sessionTokenDisplay.textContent = authToken;
+  authTokenInput.value = authToken;
+
+  copyTokenBtn.onclick = async () => {
+    authTokenInput.value = authToken;
 
     try {
-      await navigator.clipboard.writeText(sessionToken);
+      await navigator.clipboard.writeText(authToken);
       copyTokenBtn.textContent = "✅ Copiado!";
     } catch {
       copyTokenBtn.textContent = "Token pronto";
     }
 
-    if (waitingBox)      waitingBox.style.display  = "flex";
-    if (successBox)      successBox.style.display  = "none";
-    if (lastUpdate)      lastUpdate.textContent     = "Sincronizando...";
+    if (waitingBox) waitingBox.style.display = "flex";
+    if (successBox) successBox.style.display = "none";
+    if (lastUpdate) lastUpdate.textContent = "Sincronizando...";
     if (statusIndicator) statusIndicator.textContent = "Aguardando resposta";
 
     setTimeout(() => fetchMachineFromApi(), 1200);
-    setTimeout(() => { copyTokenBtn.textContent = "📋 Copiar"; }, 2000);
-  });
+    setTimeout(() => {
+      copyTokenBtn.textContent = "📋 Copiar";
+    }, 2000);
+  };
 }
 
 // ----------------------------------------------------------
@@ -568,6 +577,7 @@ async function handleLogin(event) {
     if (!data?.token) throw new Error("Login não retornou token. Verifique o backend.");
 
     saveAuthSession(data.token);
+    initializeSetupFlow();
     showAuthSuccess(`Bem-vindo, ${data.user?.username || username}! Redirecionando...`);
 
     setTimeout(async () => {
@@ -609,6 +619,7 @@ async function handleRegister(event) {
     if (!data?.token) throw new Error("Cadastro não retornou token. Verifique o backend.");
 
     saveAuthSession(data.token);
+    initializeSetupFlow();
     showAuthSuccess(`Conta criada com sucesso! Bem-vindo, ${data.user?.username || username}!`, true);
 
     setTimeout(async () => {
