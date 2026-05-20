@@ -350,6 +350,7 @@ def upgrade_route_me(request):
     """
     Endpoint para obter upgrade recomendado baseado na máquina do usuário.
     Retorna recomendação de CPU com melhor custo-benefício, ou mensagem especial para Mac.
+    Fallback: se não encontrar no Neo4j, retorna dados apropriados ao device type.
     """
     try:
         # 1. Tenta buscar os dados reais da máquina do usuário no Neo4j
@@ -376,7 +377,7 @@ def upgrade_route_me(request):
         current_mb = "A320M"
         current_score = 4500
 
-    # 3. Se for Mac, retorna mensagem especial
+    # 3. Se for Mac, SEMPRE retorna mensagem especial
     if device_type == "Mac":
         fallback_info = get_fallback_upgrade_for_device("Mac")
         return Response(
@@ -396,21 +397,43 @@ def upgrade_route_me(request):
         print(f"⚠️ Erro ao buscar recomendação: {e}")
         upgrade_data = []
     
-    # 5. Formata a resposta para o frontend
-    response_data = []
+    # 5. Se encontrou recomendação no Neo4j, retorna ela
     if upgrade_data and len(upgrade_data) > 0:
-        response_data.append({
+        response_data = [{
             "id": 1,
             "component": "Processador",
             "device_type": device_type,
             "recommendation": upgrade_data[0].get('recommendation', 'N/A'),
             "reason": "Maior salto de performance pelo menor preço. Totalmente compatível com sua placa-mãe atual, entregando o melhor custo-benefício da geração.",
-            "estimatedPrice": upgrade_data[0].get('price', 0)
-        })
+            "estimatedPrice": upgrade_data[0].get('price', 0),
+            "source": "neo4j"
+        }]
     else:
-        # Fallback caso não encontre recomendação no Neo4j
+        # 6. Se NÃO encontrou no Neo4j, usa fallback apropriado
         fallback_info = get_fallback_upgrade_for_device(device_type)
-        response_data = []
+        
+        if device_type == "Laptop":
+            response_data = [{
+                "id": 1,
+                "component": "Processador",
+                "device_type": "Laptop",
+                "recommendation": fallback_info["cpu"],
+                "reason": "Exemplo de processador de notebook de referência. Componentes de notebook não são atualizáveis - estão soldados na placa-mãe.",
+                "estimatedPrice": 800,
+                "source": "fallback",
+                "note": "Componentes não atualizáveis"
+            }]
+        else:
+            # Desktop
+            response_data = [{
+                "id": 1,
+                "component": "Processador",
+                "device_type": "Desktop",
+                "recommendation": fallback_info["cpu"],
+                "reason": f"Recomendação de referência. Para melhores resultados, analise seu setup primeiro.",
+                "estimatedPrice": fallback_info.get("score", 4500) * 0.1,  # Estimativa aproximada
+                "source": "fallback"
+            }]
         
     return Response(response_data, status=status.HTTP_200_OK)
 
