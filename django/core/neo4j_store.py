@@ -78,6 +78,77 @@ def get_gpu_compatibility(gpu_nome):
             results = session.run(query, gpu_nome=gpu_nome).data()
             return results if results else []
 
+def get_cpu_performance_score(cpu_name):
+    """Busca o performance_score de um processador pelo nome"""
+    query = """
+    MATCH (cpu:Processor {name: $cpu_name})
+    RETURN cpu.performance_score AS performance_score
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            result = session.run(query, cpu_name=cpu_name).single()
+            if result:
+                return int(result["performance_score"])
+            return 4000  # Default fallback
+
+
+def detect_device_type(cpu_name):
+    """Detecta o tipo de dispositivo baseado no nome da CPU"""
+    if not cpu_name:
+        return "Desktop"
+    
+    cpu_upper = cpu_name.upper()
+    
+    # Detecção de Mac (Apple Silicon)
+    if "APPLE" in cpu_upper or "M1" in cpu_upper or "M2" in cpu_upper or "M3" in cpu_upper:
+        return "Mac"
+    
+    # Detecção de Laptop (Intel móvel)
+    laptop_suffixes = ["HX", "HK", "H", "P", "U", "Y", "G7", "G1"]
+    for suffix in laptop_suffixes:
+        if cpu_upper.endswith(suffix):
+            return "Laptop"
+    
+    # Detecção de Laptop (AMD móvel)
+    amd_laptop_suffixes = ["H", "HS", "U", "HX"]
+    for suffix in amd_laptop_suffixes:
+        if "RYZEN" in cpu_upper:
+            for suf in amd_laptop_suffixes:
+                if cpu_upper.endswith(suf):
+                    return "Laptop"
+    
+    return "Desktop"
+
+
+def get_fallback_upgrade_for_device(device_type):
+    """Retorna uma recomendação de upgrade baseada no tipo de dispositivo"""
+    if device_type == "Mac":
+        return {
+            "type": "Mac",
+            "message": "Dispositivo Apple com Apple Silicon",
+            "can_upgrade": False,
+            "reason": "Dispositivos Mac com Apple Silicon não permitem upgrading de componentes. O processador, GPU e memória são soldados na placa-mãe. Para melhorar performance, considere um modelo mais recente de Mac."
+        }
+    
+    if device_type == "Laptop":
+        return {
+            "type": "Laptop",
+            "cpu": "Intel Core i7-12700H",
+            "mb": "Placa-mãe Notebook",
+            "score": 8500,
+            "message": "Setup de Notebook para referência"
+        }
+    
+    # Desktop
+    return {
+        "type": "Desktop",
+        "cpu": "Intel i5-10400",
+        "mb": "A320M",
+        "score": 4500,
+        "message": "Setup de Desktop para referência"
+    }
+
+
 def get_upgrade_recommendation(current_mb_name, current_cpu_score):
     query = """
     MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
