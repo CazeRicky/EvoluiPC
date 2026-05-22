@@ -342,6 +342,9 @@ function saveApiBases(djangoBase, engineBase) {
   safeStorageSet(STORAGE_KEYS.engineApiBase, String(engineBase  || "").trim());
 }
 
+// Expõe saveApiBases no escopo window para garantir acessibilidade
+window.saveApiBases = saveApiBases;
+
 function getAppStateStorageKey() { return "evoluipc.appState"; }
 function saveAppState()          {}
 function loadAppState()          { return false; }
@@ -690,7 +693,17 @@ async function fetchMachineFromApi(isManual = true) {
     return;
   }
 
-  saveApiBases(djangoBase, engineBase);
+  // Salva as URLs da API com verificação segura
+  try {
+    if (typeof window.saveApiBases === 'function') {
+      window.saveApiBases(djangoBase, engineBase);
+    } else {
+      safeStorageSet(STORAGE_KEYS.apiBase, String(djangoBase || "").trim());
+      safeStorageSet(STORAGE_KEYS.engineApiBase, String(engineBase || "").trim());
+    }
+  } catch (e) {
+    console.error("[EvoluiPC] Erro ao salvar URLs da API:", e);
+  }
   
   if (isManual) {
     fetchMachineBtn.disabled = true;
