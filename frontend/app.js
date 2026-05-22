@@ -366,7 +366,10 @@ function isUnauthorizedError(error) {
   return (
     m.includes("falha 401")    ||
     m.includes("status 401")   ||
-    m.includes("unauthorized")
+    m.includes("unauthorized") ||
+    m.includes("falha 403")    ||
+    m.includes("status 403")   ||
+    m.includes("forbidden")
   );
 }
 
@@ -664,7 +667,7 @@ function resetDashboardToNaState() {
 
 function handleLogout() {
   stopAutoFetch();
-  safeStorageRemove(getAppStateStorageKey());
+  safeStorageRemove("evoluipc.appState");
   clearAuthSession();
   clearAuthMessages();
   clearFieldValidationStates();
@@ -755,7 +758,6 @@ async function fetchMachineFromApi(isManual = true) {
     
     if (isManual) setMessage(`Dados carregados. Catálogo via ${catalogSource}.`, "ok");
 
-    // UI Updates do Setup Flow (Feito pelo seu amigo)
     if (waitingBox)      waitingBox.style.display  = "none";
     if (successBox)      successBox.style.display  = "flex";
     if (statusIndicator) statusIndicator.textContent = "Sincronizado";
@@ -853,13 +855,11 @@ async function carregarRotaUpgrade() {
 
     const dados = await parseJsonSafely(resposta);
 
-    // Suporte a dois formatos de resposta: array direto ou { route: [...] }
     const lista = Array.isArray(dados) ? dados : (dados?.route || []);
 
     if (lista.length > 0) {
       const upgrade = lista[0];
 
-      // Campos do formato array direto (component, recommendation, estimatedPrice, reason)
       if (upgrade.recommendation) {
         resultadoDiv.innerHTML = `
           <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
@@ -869,7 +869,6 @@ async function carregarRotaUpgrade() {
             <p style="color:#555;line-height:1.5;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
           </div>`;
       } else {
-        // Campos do formato { route: [{ step, action, impact }] }
         resultadoDiv.innerHTML = `
           <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
             <h3 style="margin-top:0;color:#2e7d32;">🔥 Próximo Upgrade</h3>
@@ -894,7 +893,6 @@ async function carregarRotaUpgrade() {
   }
 }
 
-// Expõe para o onclick inline do HTML
 window.carregarRotaUpgrade = carregarRotaUpgrade;
 
 // Navegação por abas
@@ -951,7 +949,14 @@ async function initializeApp() {
   renderCatalog();
   setCatalogSourceInfo("Sincronizando catálogo com o Engine Neo4j...", "");
 
-  await syncCatalogFromEngineOnLoad();
+  if (token && !token.startsWith("local-")) {
+    showDashboardScreen();
+    setSessionInfo("Validando sessão salva...");
+  } else {
+    showAuthScreen();
+  }
+
+  syncCatalogFromEngineOnLoad();
 
   if (token) {
     if (token.startsWith("local-")) {
@@ -965,23 +970,20 @@ async function initializeApp() {
       const me = await apiRequest("/api/auth/me", token);
       if (!me?.user?.username) throw new Error("Sessão inválida.");
     } catch (error) {
-      if (isNetworkFetchError(error)) {
-        setSessionInfo("Servidor reconectando... O painel será carregado temporariamente.");
-        console.warn("Backend indisponível no F5, mas o token foi mantido.");
-      } else {
+      if (isUnauthorizedError(error)) {
         clearAuthSession();
         setSessionInfo("Sessão expirada. Faça login novamente.");
         showAuthScreen();
         return;
+      } else {
+        setSessionInfo("Servidor reconectando... O painel será carregado temporariamente.");
+        console.warn("Backend indisponível no F5, mas o token foi mantido.", error.message);
       }
     }
 
     await populateDashboardFromSession();
     resetDashboardToNaState();
-    showDashboardScreen();
     fetchMachineFromApi();
-  } else {
-    showAuthScreen();
   }
 }
 
