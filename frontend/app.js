@@ -861,20 +861,38 @@ async function carregarRotaUpgrade() {
       const upgrade = lista[0];
 
       if (upgrade.recommendation) {
+        const sourceLabel = upgrade.source === "neo4j" ? "🗄️ Base de Dados" : "📋 Recomendação Padrão";
+        const sourceBgColor = upgrade.source === "neo4j" ? "#0d1b2a" : "#1a1410";
+        const sourceBorderColor = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
+        const sourceBadgeBg = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
+        
         resultadoDiv.innerHTML = `
-          <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
-            <h3 style="margin-top:0;color:#2e7d32;">🔥 Upgrade Recomendado: ${upgrade.component || "Componente"}</h3>
-            <h2 style="margin:10px 0;">${upgrade.recommendation}</h2>
-            <p style="font-size:18px;"><strong>Investimento estimado:</strong> R$ ${upgrade.estimatedPrice || "N/A"}</p>
-            <p style="color:#555;line-height:1.5;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
+          <div style="background:${sourceBgColor};padding:24px;border-radius:12px;border-left:6px solid ${sourceBorderColor};box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;color:${sourceBorderColor};font-size:16px;">🔥 Upgrade Recomendado: ${upgrade.component || "Componente"}</h3>
+              <span style="background:${sourceBadgeBg};color:#000;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:bold;">${sourceLabel}</span>
+            </div>
+            <h2 style="margin:16px 0 8px 0;font-size:28px;color:#ffffff;">${upgrade.recommendation}</h2>
+            <p style="margin:8px 0;font-size:18px;color:#b0b0b0;"><strong>Investimento estimado:</strong> <span style="color:${sourceBorderColor};font-size:20px;font-weight:bold;">R$ ${upgrade.estimatedPrice || "N/A"}</span></p>
+            <p style="margin:12px 0;color:#a0a0a0;line-height:1.6;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
+            ${upgrade.device_type ? `<p style="margin:8px 0;color:#808080;font-size:13px;">📱 Dispositivo: <strong style="color:${sourceBorderColor};">${upgrade.device_type}</strong></p>` : ""}
+            ${upgrade.note ? `<p style="margin:8px 0;color:#ffcccc;font-size:13px;background:#332222;padding:8px 12px;border-radius:4px;border-left:3px solid #ff6b6b;">⚠️ ${upgrade.note}</p>` : ""}
           </div>`;
       } else {
+        const sourceLabel = upgrade.source === "neo4j" ? "🗄️ Base de Dados" : "📋 Recomendação Padrão";
+        const sourceBgColor = upgrade.source === "neo4j" ? "#0d1b2a" : "#1a1410";
+        const sourceBorderColor = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
+        const sourceBadgeBg = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
+        
         resultadoDiv.innerHTML = `
-          <div style="background:#f1f8e9;padding:20px;border-radius:8px;border-left:5px solid #4CAF50;">
-            <h3 style="margin-top:0;color:#2e7d32;">🔥 Próximo Upgrade</h3>
-            <h2 style="margin:10px 0;">${upgrade.action || "N/A"}</h2>
-            <p style="font-size:18px;"><strong>Etapa:</strong> ${upgrade.step || "N/A"}</p>
-            <p style="color:#555;line-height:1.5;"><strong>Impacto:</strong> ${upgrade.impact || "Sem impacto informado."}</p>
+          <div style="background:${sourceBgColor};padding:24px;border-radius:12px;border-left:6px solid ${sourceBorderColor};box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;color:${sourceBorderColor};font-size:16px;">🔥 Próximo Upgrade</h3>
+              <span style="background:${sourceBadgeBg};color:#000;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:bold;">${sourceLabel}</span>
+            </div>
+            <h2 style="margin:16px 0 8px 0;font-size:28px;color:#ffffff;">${upgrade.action || "N/A"}</h2>
+            <p style="margin:8px 0;font-size:18px;color:#b0b0b0;"><strong>Etapa:</strong> <strong style="color:${sourceBorderColor};">${upgrade.step || "N/A"}</strong></p>
+            <p style="margin:12px 0;color:#a0a0a0;line-height:1.6;"><strong>Impacto:</strong> ${upgrade.impact || "Sem impacto informado."}</p>
           </div>`;
       }
     } else {
