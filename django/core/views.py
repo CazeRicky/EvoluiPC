@@ -3,7 +3,6 @@ from urllib import request
 from neo4j.exceptions import Neo4jError
 from rest_framework import permissions, status
 from rest_framework.response import Response
-from .models import MachineSnapshot
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 # Importe a função que você acabou de criar no neo4j_store
@@ -20,6 +19,7 @@ from .neo4j_store import (
     get_user_profile,
     get_user_pc_parts,
     get_user_upgrade_options,
+    get_user_scan_history,
     upsert_user_profile,
     upsert_user_pc_parts,
     upsert_user_upgrade_options,
@@ -494,4 +494,17 @@ def gpu_compatibility(request, gpu_name):
             "status": "error",
             "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
+class ScanHistoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            history = get_user_scan_history(request.user.id)
+            return Response(history, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Erro ao buscar historico de hardware")
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

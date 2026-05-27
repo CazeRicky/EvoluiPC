@@ -11,6 +11,7 @@ from .views import (
     RecommendationView,
     RegisterView,
     UpgradeRouteView,
+    ScanHistoryView,  
     upgrade_route_me,
     list_cpus,
     list_gpus,
@@ -27,12 +28,16 @@ urlpatterns = [
     path("auth/login", LoginView.as_view(), name="auth-login"),
     path("auth/me", AuthMeView.as_view(), name="auth-me"),
     path("auth/logout", LogoutView.as_view(), name="auth-logout"),
+    
     path("machine/me", MachineCurrentView.as_view(), name="machine-me"),
+    path("machine/history", ScanHistoryView.as_view(), name="machine-history"), 
     path("machine", MachineSyncView.as_view(), name="machine-sync-canonical"),
     path("machine/sync", MachineSyncView.as_view(), name="machine-sync"),
-    path("upgrade-route/me", UpgradeRouteView.as_view(), name="upgrade-route-me"),
+    
+    path("upgrade-route/me", UpgradeRouteView.as_view(), name="upgrade-route-me-old"), 
     path("upgrade-route/me/", upgrade_route_me, name="upgrade-route-me"),
     path("recommendations/me", RecommendationView.as_view(), name="recommendations-me"),
+    
     path("hardware/cpus", list_cpus, name="list-cpus"),
     path("hardware/gpus", list_gpus, name="list-gpus"),
     path("hardware/gpu/<str:gpu_name>/compatibility", gpu_compatibility, name="gpu-compatibility"),
