@@ -392,7 +392,7 @@ def upgrade_route_me(request):
 
     # 4. Chama a Inteligência do Neo4j para recomendação
     try:
-        upgrade_data = get_upgrade_recommendation(current_mb, current_score)
+        upgrade_data = get_upgrade_recommendation(current_cpu_name, current_score)
     except Exception as e:
         print(f"⚠️ Erro ao buscar recomendação: {e}")
         upgrade_data = []

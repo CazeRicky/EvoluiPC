@@ -149,23 +149,39 @@ def get_fallback_upgrade_for_device(device_type):
     }
 
 
-def get_upgrade_recommendation(current_mb_name, current_cpu_score):
+def _extract_cpu_manufacturer(cpu_name):
+    """Extrai o fabricante da CPU (Intel, AMD) baseado no nome"""
+    if not cpu_name:
+        return "Intel"  # Default
+    cpu_upper = cpu_name.upper()
+    if "AMD" in cpu_upper or "RYZEN" in cpu_upper:
+        return "AMD"
+    return "Intel"
+
+
+def get_upgrade_recommendation(current_cpu_name, current_cpu_score):
     """
     Busca a melhor recomendação de CPU com melhor custo-benefício.
-    Tenta primeiro com a placa-mãe do usuário, depois faz fallback para qualquer CPU.
+    Estratégia em 3 níveis:
+    1. Buscar CPUs do MESMO FABRICANTE com score maior (melhor match)
+    2. Buscar qualquer CPU Desktop com score maior
+    3. Retornar vazio (será tratado como fallback no views.py)
     """
-    # Tentativa 1: Buscar CPUs compatíveis com a placa-mãe específica do usuário
-    query_specific = """
-    MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
-    MATCH (new_cpu:Processor)-[:FITS_IN]->(s)
-    WHERE new_cpu.performance_score > $current_cpu_score
+    manufacturer = _extract_cpu_manufacturer(current_cpu_name)
+    
+    # Tentativa 1: CPUs do mesmo fabricante com score melhor
+    query_same_manufacturer = """
+    MATCH (new_cpu:Processor)
+    WHERE new_cpu.performance_score > $current_cpu_score 
+      AND new_cpu.type = "Desktop"
+      AND new_cpu.name CONTAINS $manufacturer
     WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
     RETURN new_cpu.name AS recommendation, new_cpu.price AS price
     ORDER BY cost_benefit_ratio DESC
     LIMIT 1
     """
     
-    # Tentativa 2: Se não encontrar, buscar qualquer CPU com melhor score
+    # Tentativa 2: Qualquer CPU Desktop com score melhor
     query_generic = """
     MATCH (new_cpu:Processor)
     WHERE new_cpu.performance_score > $current_cpu_score AND new_cpu.type = "Desktop"
@@ -177,15 +193,15 @@ def get_upgrade_recommendation(current_mb_name, current_cpu_score):
     
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
-            # Tenta primeiro com placa-mãe específica
+            # Tenta primeiro com mesmo fabricante
             result = session.run(
-                query_specific,
-                current_mb_name=current_mb_name,
+                query_same_manufacturer,
                 current_cpu_score=current_cpu_score,
+                manufacturer=manufacturer,
             )
             data = result.data()
             
-            # Se não encontrou, tenta com qualquer CPU Desktop
+            # Se não encontrou, tenta qualquer CPU Desktop
             if not data:
                 result = session.run(
                     query_generic,
