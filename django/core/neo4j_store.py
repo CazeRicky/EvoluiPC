@@ -354,11 +354,24 @@ def upsert_user_pc_parts(user, machine, diagnostics, source):
     MERGE (u:AppUser {user_id: $user_id})
     ON CREATE SET u.username = $username, u.email = $email, u.created_at = $now
     SET u.updated_at = $now
+    
+    OPTIONAL MATCH (u)-[:HAS_PC_PARTS]->(current:UserPcParts)
+    WITH u, current, current.machine_json AS old_machine
+    
     MERGE (u)-[:HAS_PC_PARTS]->(p:UserPcParts)
     SET p.machine_json = $machine_json,
         p.diagnostics_json = $diagnostics_json,
         p.source = $source,
         p.updated_at = $now
+        
+    FOREACH (ignoreMe IN CASE WHEN old_machine IS NULL OR old_machine <> $machine_json THEN [1] ELSE [] END |
+        CREATE (u)-[:HAD_HARDWARE_AT {date: $now}]->(h:HardwareHistory {
+            machine_json: $machine_json,
+            source: $source,
+            scanned_at: $now
+        })
+    )
+    
     RETURN p.machine_json AS machine_json, p.diagnostics_json AS diagnostics_json, p.source AS source, p.updated_at AS updated_at
     """
     with get_driver() as driver:
@@ -382,6 +395,25 @@ def upsert_user_pc_parts(user, machine, diagnostics, source):
                 "source": record["source"] or source,
                 "collected_at": record["updated_at"] or "",
             }
+
+
+def get_user_scan_history(user_id):
+    query = """
+    MATCH (u:AppUser {user_id: $user_id})-[:HAD_HARDWARE_AT]->(h:HardwareHistory)
+    RETURN h.machine_json AS machine_json, h.scanned_at AS scanned_at
+    ORDER BY h.scanned_at DESC
+    """
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            results = session.run(query, user_id=user_id).data()
+            history = []
+            for record in results:
+                machine_data = _json_loads(record["machine_json"], {})
+                history.append({
+                    "scanned_at": record["scanned_at"],
+                    "machine": machine_data
+                })
+            return history
 
 
 def get_user_upgrade_options(user_id):
@@ -536,26 +568,4 @@ def upsert_device_classification(user, cpu_classification, source="device-scanne
                 "device_type": record["device_type"],
                 "cpu_suffix": record["cpu_suffix"],
                 "confidence": record["confidence"],
-            }
-
-
-def get_device_classification(user_id):
-    """Recupera a classificação do dispositivo para um usuário"""
-    query = """
-    MATCH (u:AppUser {user_id: $user_id})
-    OPTIONAL MATCH (u)-[:HAS_DEVICE_INFO]->(d:DeviceClassification)
-    RETURN properties(d) AS props
-    """
-    with get_driver() as driver:
-        with driver.session(database=NEO4J_DATABASE) as session:
-            record = session.run(query, user_id=user_id).single()
-            props = record["props"] if record else None
-            if not props:
-                return None
-            return {
-                "device_type": props.get("device_type", "Desconhecido"),
-                "cpu_suffix": props.get("cpu_suffix", ""),
-                "description": props.get("description", ""),
-                "confidence": props.get("confidence", 0),
-                "detected_at": props.get("detected_at", ""),
             }
