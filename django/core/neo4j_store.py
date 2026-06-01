@@ -236,33 +236,34 @@ def _build_machine_payload(record):
 
 def get_random_pc_profile(exclude_signatures=None):
     excluded = exclude_signatures or []
+    # Query simplificada: busca um processador e uma placa-mãe compatível
     query = """
-    MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
-    WITH cpu, mb, gpu, cpu.nome + '|' + mb.nome + '|' + gpu.nome AS signature
+    MATCH (cpu:Processor)-[:FITS_IN]->(s:Socket)<-[:HAS_SOCKET]-(mb:Motherboard)
+    WHERE mb.type = "Desktop"
+    WITH cpu, mb, cpu.name + '|' + mb.name AS signature
     WHERE NOT signature IN $excluded
     RETURN
-      cpu.nome AS cpu_name,
-      coalesce(cpu.performance, '') AS cpu_tier,
-      coalesce(cpu.soquete, '') AS socket,
-      mb.nome AS mb_name,
-      coalesce(mb.pci_express, '') AS ram_type,
-      gpu.nome AS gpu_name,
-      coalesce(gpu.performance, '') AS gpu_tier
+      cpu.name AS cpu_name,
+      coalesce(cpu.type, '') AS cpu_tier,
+      coalesce(cpu.socket, '') AS socket,
+      mb.name AS mb_name,
+      coalesce(mb.socket, '') AS ram_type,
+      "GPU Integrada" AS gpu_name,
+      "Integrada" AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
     fallback_query = """
-    MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
-    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
+    MATCH (cpu:Processor)-[:FITS_IN]->(s:Socket)<-[:HAS_SOCKET]-(mb:Motherboard)
+    WHERE mb.type = "Desktop"
     RETURN
-      cpu.nome AS cpu_name,
-      coalesce(cpu.performance, '') AS cpu_tier,
-      coalesce(cpu.soquete, '') AS socket,
-      mb.nome AS mb_name,
-      coalesce(mb.pci_express, '') AS ram_type,
-      gpu.nome AS gpu_name,
-      coalesce(gpu.performance, '') AS gpu_tier
+      cpu.name AS cpu_name,
+      coalesce(cpu.type, '') AS cpu_tier,
+      coalesce(cpu.socket, '') AS socket,
+      mb.name AS mb_name,
+      coalesce(mb.socket, '') AS ram_type,
+      "GPU Integrada" AS gpu_name,
+      "Integrada" AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """

@@ -288,35 +288,6 @@ class MachineCurrentView(APIView):
         )
 
 
-# Endpoint de rota de upgrade.
-class UpgradeRouteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        data = get_user_upgrade_options(request.user.id)
-        if not data:
-            return Response(
-                {
-                    "user_id": request.user.id,
-                    "schema_version": "1.0",
-                    "route": [],
-                    "source": "neo4j-empty",
-                    "is_new_user": True,
-                },
-                status=200,
-            )
-
-        return Response(
-            {
-                "user_id": request.user.id,
-                "schema_version": "1.0",
-                "route": data["route"],
-                "source": data["source"],
-            },
-            status=200,
-        )
-
-
 # Endpoint de recomendacoes.
 class RecommendationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
