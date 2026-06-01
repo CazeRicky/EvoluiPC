@@ -5,6 +5,11 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _split_csv_env(var_name, default=""):
+    raw = os.getenv(var_name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Producao / ambiente
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
@@ -84,21 +89,41 @@ REST_FRAMEWORK = {
 }
 
 
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "DJANGO_CORS_ALLOWED_ORIGINS",
-        "http://127.0.0.1:4173,http://localhost:4173,http://127.0.0.1:5500,http://localhost:5500,https://evoluipc-frontend.onrender.com"
-    ).split(",")
-    if origin.strip()
+_DEFAULT_CORS_ORIGINS = [
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "https://evoluipc-frontend.onrender.com",
+    "https://evoluipc-fronteend.onrender.com",
 ]
 
+CORS_ALLOWED_ORIGINS = list(
+    dict.fromkeys(
+        _DEFAULT_CORS_ORIGINS
+        + _split_csv_env("DJANGO_CORS_ALLOWED_ORIGINS")
+    )
+)
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "DJANGO_CSRF_TRUSTED_ORIGINS",
-        "https://evoluipc-frontend.onrender.com,https://evoluipc-django.onrender.com"
-    ).split(",")
-    if origin.strip()
+
+# Permite subdominios Render esperados para facilitar trocas de servico no deploy.
+CORS_ALLOWED_ORIGIN_REGEXES = list(
+    dict.fromkeys(
+        [r"^https://evoluipc-.*\.onrender\.com$"]
+        + _split_csv_env("DJANGO_CORS_ALLOWED_ORIGIN_REGEXES")
+    )
+)
+
+
+_DEFAULT_CSRF_TRUSTED_ORIGINS = [
+    "https://evoluipc-frontend.onrender.com",
+    "https://evoluipc-fronteend.onrender.com",
+    "https://evoluipc-django.onrender.com",
 ]
+
+CSRF_TRUSTED_ORIGINS = list(
+    dict.fromkeys(
+        _DEFAULT_CSRF_TRUSTED_ORIGINS
+        + _split_csv_env("DJANGO_CSRF_TRUSTED_ORIGINS")
+    )
+)

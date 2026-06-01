@@ -1,12 +1,12 @@
-from django.urls import path
 from django.http import JsonResponse
-from django.urls import include, path   
+from django.urls import path
 
 from .views import (
     AuthMeView,
     LoginView,
     LogoutView,
     MachineCurrentView,
+    ScanHistoryView,
     MachineSyncView,
     RecommendationView,
     RegisterView,
