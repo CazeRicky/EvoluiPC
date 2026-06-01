@@ -1,4 +1,6 @@
 import multiprocessing
+import threading
+import time
 import psutil
 import cpuinfo
 import requests
@@ -9,15 +11,33 @@ try:
 except ImportError:
     wmi = None
 
-
 API_URL = "https://evoluipc-django.onrender.com/api/machine/sync"
+PING_URL = "https://evoluipc-django.onrender.com/"
+TIMEOUT_PING = 60
+TIMEOUT_SYNC = 60
+MAX_RETRIES = 3
 
 
 def ler_hardware_local():
-    print("Iniciando varredura profunda de hardware...")
+    print("🔍 Varrendo hardware da máquina...")
 
-    info_cpu = cpuinfo.get_cpu_info()
-    nome_cpu = info_cpu.get("brand_raw", "Processador não identificado")
+    resultado_cpu = {}
+
+    def buscar_cpu():
+        info = cpuinfo.get_cpu_info()
+        resultado_cpu["nome"] = info.get("brand_raw", "Processador não identificado")
+
+    thread_cpu = threading.Thread(target=buscar_cpu)
+    thread_cpu.start()
+
+    print("   Aguardando leitura da CPU", end="", flush=True)
+    while thread_cpu.is_alive():
+        print(".", end="", flush=True)
+        time.sleep(1)
+    thread_cpu.join()
+    print(" OK")
+
+    nome_cpu = resultado_cpu.get("nome", "Processador não identificado")
     ram_gb = round(psutil.virtual_memory().total / (1024 ** 3))
 
     nome_gpu = "Não identificada"
@@ -26,33 +46,43 @@ def ler_hardware_local():
     if wmi is not None:
         try:
             w = wmi.WMI()
-
             for gpu in w.Win32_VideoController():
                 if getattr(gpu, "Name", None):
                     nome_gpu = gpu.Name
                     break
-
             for board in w.Win32_BaseBoard():
                 fabricante = getattr(board, "Manufacturer", "") or ""
                 produto = getattr(board, "Product", "") or ""
                 nome_placa_mae = f"{fabricante} {produto}".strip() or "Não identificada"
                 break
-
         except Exception as e:
-            print(f"⚠️ Erro WMI: {e}")
+            print(f"⚠️  Erro WMI: {e}")
     else:
-        print("⚠️ Biblioteca WMI não disponível. GPU e placa-mãe podem não ser detectadas.")
+        print("⚠️  WMI indisponível. GPU e placa-mãe podem não ser detectadas.")
 
     return {
         "cpu": nome_cpu,
         "gpu": nome_gpu,
         "ram": f"{ram_gb}GB",
-        "motherboard": nome_placa_mae
+        "motherboard": nome_placa_mae,
     }
 
 
-def montar_payload(meu_pc):
-    return {
+def acordar_servidor():
+    print("\n📡 Conectando ao servidor (pode levar até 60s na primeira vez)...", end="", flush=True)
+    try:
+        inicio = time.time()
+        requests.get(PING_URL, timeout=TIMEOUT_PING)
+        duracao = int(time.time() - inicio)
+        print(f" OK ({duracao}s)")
+        return True
+    except Exception:
+        print(" Servidor pode estar lento, tentando enviar mesmo assim.")
+        return False
+
+
+def enviar_com_retry(token, meu_pc):
+    payload = {
         "schema_version": "1.0",
         "source": "desktop-agent",
         "machine": meu_pc,
@@ -60,26 +90,37 @@ def montar_payload(meu_pc):
             f"CPU detectada: {meu_pc.get('cpu', 'N/A')}",
             f"GPU detectada: {meu_pc.get('gpu', 'N/A')}",
             f"RAM detectada: {meu_pc.get('ram', 'N/A')}",
-            f"Placa-mãe detectada: {meu_pc.get('motherboard', 'N/A')}"
+            f"Placa-mãe detectada: {meu_pc.get('motherboard', 'N/A')}",
         ],
         "route": [],
-        "catalog": []
+        "catalog": [],
     }
 
-
-def enviar_para_servidor(token, payload):
-    headers = {
+    cabecalhos = {
+        "Authorization": f"Token {token}",
         "Content-Type": "application/json",
-        "Authorization": f"Token {token}"
     }
 
-    response = requests.post(
-        API_URL,
-        json=payload,
-        headers=headers,
-        timeout=20
-    )
-    return response
+    for tentativa in range(1, MAX_RETRIES + 1):
+        try:
+            print(f"\n📤 Enviando dados... (tentativa {tentativa}/{MAX_RETRIES})")
+            resposta = requests.post(API_URL, json=payload, headers=cabecalhos, timeout=TIMEOUT_SYNC)
+
+            if resposta.status_code in [200, 201]:
+                return True, None
+            else:
+                erro = f"Servidor recusou os dados (Código {resposta.status_code}): {resposta.text}"
+                print(f"❌ {erro}")
+                if resposta.status_code in [401, 403]:
+                    return False, erro
+        except requests.exceptions.Timeout:
+            print(f"⏱️  Timeout na tentativa {tentativa}. Aguardando antes de tentar novamente...")
+            time.sleep(5)
+        except Exception as e:
+            print(f"⚠️  Erro na tentativa {tentativa}: {e}")
+            time.sleep(5)
+
+    return False, "Número máximo de tentativas atingido."
 
 
 if __name__ == "__main__":
@@ -91,36 +132,26 @@ if __name__ == "__main__":
 
     usuario = input("Digite seu nome de usuário: ").strip().lower()
     token = input("Digite seu Token de Acesso (copie do painel web): ").strip()
-    
+
     meu_pc = ler_hardware_local()
-    
-    payload = {
-        "username": usuario,
-        "machine": meu_pc
-    }
-    
-    cabecalhos = {
-        "Authorization": f"Token {token}",
-        "Content-Type": "application/json"
-    }
-    
-    try:
-        # Se der erro 404, tente tirar o "/api" e deixar apenas "/machine/sync"
-        url = "https://evoluipc-django.onrender.com/api/machine/sync"
-        
-        print(f"\n📡 Apresentando credenciais e enviando dados para a nuvem...")
-        resposta = requests.post(url, json=payload, headers=cabecalhos, timeout=15)
-        
-        if resposta.status_code in [200, 201]:
-            print(f"\n✅ SUCESSO! Dados de hardware salvos na nuvem para o usuário '{usuario}'.")
-        else:
-            print(f"\n❌ ERRO NO SERVIDOR: O servidor recusou os dados (Código {resposta.status_code})")
-            print(f"Resposta do servidor: {resposta.text}")
-            
-    except Exception as e:
-        print(f"\n❌ ERRO DE CONEXÃO: Não foi possível alcançar o servidor.")
-        print(f"Detalhe técnico: {e}")
-        print("Verifique sua conexão com a internet ou se o servidor do EvoluiPC está online.")
+
+    print(f"\n💻 Hardware detectado:")
+    print(f"   CPU:       {meu_pc['cpu']}")
+    print(f"   GPU:       {meu_pc['gpu']}")
+    print(f"   RAM:       {meu_pc['ram']}")
+    print(f"   Placa-mãe: {meu_pc['motherboard']}")
+
+    acordar_servidor()
+
+    sucesso, erro = enviar_com_retry(token, meu_pc)
 
     print("\n=====================================")
-    input("Aperte ENTER para fechar esta janela...")
+    if sucesso:
+        print(f"✅ SUCESSO! Hardware de '{usuario}' salvo na nuvem.")
+    else:
+        print(f"❌ FALHA ao enviar dados.")
+        if erro:
+            print(f"   Detalhe: {erro}")
+        print("   Verifique sua conexão ou se o token está correto.")
+
+    input("\nAperte ENTER para fechar esta janela...")

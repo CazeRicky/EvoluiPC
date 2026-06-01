@@ -29,3 +29,14 @@ class MachineSyncSerializer(serializers.Serializer):
         if not re.match(r'^[a-zA-Z0-9_-]+$', value):
             raise serializers.ValidationError("A origem (source) contém caracteres inválidos.")
         return value
+
+    def validate_machine(self, value):
+        safe_pattern = re.compile(r'^[a-zA-Z0-9\s\-\.\/]+$')
+        
+        for part_name, part_value in value.items():
+            if isinstance(part_value, str) and part_value != "":
+                if not safe_pattern.match(part_value):
+                    raise serializers.ValidationError(
+                        f"O hardware informado ({part_name}) contém caracteres suspeitos e foi rejeitado pelo servidor."
+                    )
+        return value
