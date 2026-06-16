@@ -5,8 +5,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 
-from .neo4j_store import get_upgrade_recommendation
-
+from .neo4j_store import (
+    get_upgrade_recommendation,
+    get_cpu_performance_score,
+    detect_device_type,
+    get_fallback_upgrade_for_device,
+)
 from .neo4j_identity import (
     authenticate_identity,
     ensure_user_identity,
@@ -33,14 +37,10 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Versoes de schema aceitas pela API.
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
-
-# Tupla com todas as exceções de conexão Neo4j para reutilizar nos excepts.
 NEO4J_CONNECTION_ERRORS = (Neo4jError, ServiceUnavailable)
 
 
-# Endpoint de cadastro.
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -106,7 +106,6 @@ class RegisterView(APIView):
         )
 
 
-# Endpoint de login.
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -134,11 +133,7 @@ class LoginView(APIView):
         try:
             upsert_user_profile(
                 identity,
-                {
-                    "auth": {
-                        "last_login": True,
-                    }
-                },
+                {"auth": {"last_login": True}},
                 source="web-login",
                 event_type="login",
             )
@@ -161,7 +156,6 @@ class LoginView(APIView):
         )
 
 
-# Endpoint de dados do usuario autenticado.
 class AuthMeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -180,7 +174,6 @@ class AuthMeView(APIView):
         )
 
 
-# Endpoint de logout por token.
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -193,7 +186,6 @@ class LogoutView(APIView):
         )
 
 
-# Endpoint de sincronizacao da maquina.
 class MachineSyncView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -255,7 +247,6 @@ class MachineSyncView(APIView):
         )
 
 
-# Endpoint do snapshot atual.
 class MachineCurrentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -289,36 +280,6 @@ class MachineCurrentView(APIView):
         )
 
 
-# Endpoint de rota de upgrade.
-class UpgradeRouteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        data = get_user_upgrade_options(request.user.id)
-        if not data:
-            return Response(
-                {
-                    "user_id": request.user.id,
-                    "schema_version": "1.0",
-                    "route": [],
-                    "source": "neo4j-empty",
-                    "is_new_user": True,
-                },
-                status=200,
-            )
-
-        return Response(
-            {
-                "user_id": request.user.id,
-                "schema_version": "1.0",
-                "route": data["route"],
-                "source": data["source"],
-            },
-            status=200,
-        )
-
-
-# Endpoint de recomendacoes.
 class RecommendationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -351,97 +312,135 @@ class RecommendationView(APIView):
 def upgrade_route_me(request):
     """
     Endpoint para obter upgrade recomendado baseado na máquina do usuário.
-    Retorna recomendação de CPU com melhor custo-benefício.
+    Retorna recomendação de CPU com melhor custo-benefício, ou mensagem especial para Mac.
+    Fallback: se não encontrar no Neo4j, retorna dados apropriados ao device type.
     """
     try:
         user_pc_data = get_user_pc_parts(request.user.id)
 
         if user_pc_data and user_pc_data.get("machine"):
+            current_cpu_name = user_pc_data["machine"].get("cpu", "Intel i5-10400")
             current_mb = user_pc_data["machine"].get("motherboard", "A320M")
-            current_score = int(user_pc_data["machine"].get("cpu_score", 4000))
+            current_score = get_cpu_performance_score(current_cpu_name)
         else:
+            current_cpu_name = "Intel i5-10400"
             current_mb = "A320M"
-            current_score = 4000
+            current_score = get_cpu_performance_score(current_cpu_name)
+
+        device_type = detect_device_type(current_cpu_name)
 
     except Exception as e:
-        logger.warning(f"Usando PC Virtual (Fallback). Motivo: {e}")
+        logger.warning(f"Erro ao buscar dados da máquina: {e}")
+        device_type = "Desktop"
+        current_cpu_name = "Intel i5-10400"
         current_mb = "A320M"
-        current_score = 4000
+        current_score = 4500
 
+    # Se for Mac, retorna mensagem especial sem buscar upgrade
+    if device_type == "Mac":
+        fallback_info = get_fallback_upgrade_for_device("Mac")
+        return Response(
+            {
+                "device_type": "Mac",
+                "can_upgrade": False,
+                "message": fallback_info["reason"],
+                "recommendations": [],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    # Busca recomendação no Neo4j
     try:
-        upgrade_data = get_upgrade_recommendation(current_mb, current_score)
+        upgrade_data = get_upgrade_recommendation(current_cpu_name, current_score)
     except Exception as e:
         logger.warning(f"Erro ao buscar recomendação: {e}")
         upgrade_data = []
 
-    response_data = []
     if upgrade_data and len(upgrade_data) > 0:
-        response_data.append({
+        response_data = [{
             "id": 1,
             "component": "Processador",
+            "device_type": device_type,
             "recommendation": upgrade_data[0].get('recommendation', 'N/A'),
             "reason": "Maior salto de performance pelo menor preço. Totalmente compatível com sua placa-mãe atual, entregando o melhor custo-benefício da geração.",
-            "estimatedPrice": upgrade_data[0].get('price', 0)
-        })
+            "estimatedPrice": upgrade_data[0].get('price', 0),
+            "source": "neo4j",
+        }]
+    else:
+        # Fallback quando Neo4j não retorna resultado
+        fallback_info = get_fallback_upgrade_for_device(device_type)
+
+        if device_type == "Laptop":
+            response_data = [{
+                "id": 1,
+                "component": "Processador",
+                "device_type": "Laptop",
+                "recommendation": fallback_info["cpu"],
+                "reason": "Exemplo de processador de notebook de referência. Componentes de notebook não são atualizáveis - estão soldados na placa-mãe.",
+                "estimatedPrice": 800,
+                "source": "fallback",
+                "note": "Componentes não atualizáveis",
+            }]
+        else:
+            response_data = [{
+                "id": 1,
+                "component": "Processador",
+                "device_type": "Desktop",
+                "recommendation": fallback_info["cpu"],
+                "reason": "Recomendação de referência. Para melhores resultados, analise seu setup primeiro.",
+                "estimatedPrice": fallback_info.get("score", 4500) * 0.1,
+                "source": "fallback",
+            }]
 
     return Response(response_data, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
 def list_cpus(request):
-    """
-    Endpoint para listar todos os processadores disponíveis no banco.
-    """
     try:
         cpus = get_all_cpus()
         return Response({
             "status": "success",
             "data": cpus,
-            "count": len(cpus)
+            "count": len(cpus),
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 def list_gpus(request):
-    """
-    Endpoint para listar todas as GPUs disponíveis no banco.
-    """
     try:
         gpus = get_all_gpus()
         return Response({
             "status": "success",
             "data": gpus,
-            "count": len(gpus)
+            "count": len(gpus),
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 def gpu_compatibility(request, gpu_name):
-    """
-    Endpoint para listar compatibilidades de uma GPU específica.
-    """
     try:
         compatibility = get_gpu_compatibility(gpu_name)
         return Response({
             "status": "success",
             "gpu": gpu_name,
             "compatibility": compatibility,
-            "count": len(compatibility)
+            "count": len(compatibility),
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -456,5 +455,5 @@ class ScanHistoryView(APIView):
             logger.exception("Erro ao buscar historico de hardware")
             return Response(
                 {"detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
