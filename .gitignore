@@ -26,3 +26,8 @@ logs/
 
 # Docker
 docker-compose.override.yml
+
+#Scanner
+build/
+dist/
+*.spec
