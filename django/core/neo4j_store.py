@@ -2,7 +2,9 @@ import os
 import json
 import random
 from datetime import datetime, timezone
-from neo4j import GraphDatabase
+
+from .neo4j_http_driver import HttpGraphDatabase as GraphDatabase
+from .neo4j_http_driver import ServiceUnavailable, Neo4jHttpError as Neo4jError
 
 NEO4J_URI = os.environ["NEO4J_URI"]
 NEO4J_USER = os.environ["NEO4J_USER"]
@@ -78,138 +80,24 @@ def get_gpu_compatibility(gpu_nome):
             results = session.run(query, gpu_nome=gpu_nome).data()
             return results if results else []
 
-def get_cpu_performance_score(cpu_name):
-    """Busca o performance_score de um processador pelo nome"""
+def get_upgrade_recommendation(current_mb_name, current_cpu_score):
     query = """
-    MATCH (cpu:Processor {name: $cpu_name})
-    RETURN cpu.performance_score AS performance_score
-    """
-    with get_driver() as driver:
-        with driver.session(database=NEO4J_DATABASE) as session:
-            result = session.run(query, cpu_name=cpu_name).single()
-            if result:
-                return int(result["performance_score"])
-            return 4000  # Default fallback
-
-
-def detect_device_type(cpu_name):
-    """Detecta o tipo de dispositivo baseado no nome da CPU"""
-    if not cpu_name:
-        return "Desktop"
-    
-    cpu_upper = cpu_name.upper()
-    
-    # Detecção de Mac (Apple Silicon)
-    if "APPLE" in cpu_upper or "M1" in cpu_upper or "M2" in cpu_upper or "M3" in cpu_upper:
-        return "Mac"
-    
-    # Detecção de Laptop (Intel móvel)
-    laptop_suffixes = ["HX", "HK", "H", "P", "U", "Y", "G7", "G1"]
-    for suffix in laptop_suffixes:
-        if cpu_upper.endswith(suffix):
-            return "Laptop"
-    
-    # Detecção de Laptop (AMD móvel)
-    amd_laptop_suffixes = ["H", "HS", "U", "HX"]
-    for suffix in amd_laptop_suffixes:
-        if "RYZEN" in cpu_upper:
-            for suf in amd_laptop_suffixes:
-                if cpu_upper.endswith(suf):
-                    return "Laptop"
-    
-    return "Desktop"
-
-
-def get_fallback_upgrade_for_device(device_type):
-    """Retorna uma recomendação de upgrade baseada no tipo de dispositivo"""
-    if device_type == "Mac":
-        return {
-            "type": "Mac",
-            "message": "Dispositivo Apple com Apple Silicon",
-            "can_upgrade": False,
-            "reason": "Dispositivos Mac com Apple Silicon não permitem upgrading de componentes. O processador, GPU e memória são soldados na placa-mãe. Para melhorar performance, considere um modelo mais recente de Mac."
-        }
-    
-    if device_type == "Laptop":
-        return {
-            "type": "Laptop",
-            "cpu": "Intel Core i7-12700H",
-            "mb": "Placa-mãe Notebook",
-            "score": 8500,
-            "message": "Setup de Notebook para referência"
-        }
-    
-    # Desktop
-    return {
-        "type": "Desktop",
-        "cpu": "Intel i5-10400",
-        "mb": "A320M",
-        "score": 4500,
-        "message": "Setup de Desktop para referência"
-    }
-
-
-def _extract_cpu_manufacturer(cpu_name):
-    """Extrai o fabricante da CPU (Intel, AMD) baseado no nome"""
-    if not cpu_name:
-        return "Intel"  # Default
-    cpu_upper = cpu_name.upper()
-    if "AMD" in cpu_upper or "RYZEN" in cpu_upper:
-        return "AMD"
-    return "Intel"
-
-
-def get_upgrade_recommendation(current_cpu_name, current_cpu_score):
-    """
-    Busca a melhor recomendação de CPU com melhor custo-benefício.
-    Estratégia em 3 níveis:
-    1. Buscar CPUs do MESMO FABRICANTE com score maior (melhor match)
-    2. Buscar qualquer CPU Desktop com score maior
-    3. Retornar vazio (será tratado como fallback no views.py)
-    """
-    manufacturer = _extract_cpu_manufacturer(current_cpu_name)
-    
-    # Tentativa 1: CPUs do mesmo fabricante com score melhor
-    query_same_manufacturer = """
-    MATCH (new_cpu:Processor)
-    WHERE new_cpu.performance_score > $current_cpu_score 
-      AND new_cpu.type = "Desktop"
-      AND new_cpu.name CONTAINS $manufacturer
+    MATCH (mb:Motherboard {name: $current_mb_name})-[:HAS_SOCKET]->(s:Socket)
+    MATCH (new_cpu:Processor)-[:FITS_IN]->(s)
+    WHERE new_cpu.performance_score > $current_cpu_score
     WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
     RETURN new_cpu.name AS recommendation, new_cpu.price AS price
     ORDER BY cost_benefit_ratio DESC
     LIMIT 1
     """
-    
-    # Tentativa 2: Qualquer CPU Desktop com score melhor
-    query_generic = """
-    MATCH (new_cpu:Processor)
-    WHERE new_cpu.performance_score > $current_cpu_score AND new_cpu.type = "Desktop"
-    WITH new_cpu, (toFloat(new_cpu.performance_score) / new_cpu.price) AS cost_benefit_ratio
-    RETURN new_cpu.name AS recommendation, new_cpu.price AS price
-    ORDER BY cost_benefit_ratio DESC
-    LIMIT 1
-    """
-    
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
-            # Tenta primeiro com mesmo fabricante
             result = session.run(
-                query_same_manufacturer,
+                query,
+                current_mb_name=current_mb_name,
                 current_cpu_score=current_cpu_score,
-                manufacturer=manufacturer,
             )
-            data = result.data()
-            
-            # Se não encontrou, tenta qualquer CPU Desktop
-            if not data:
-                result = session.run(
-                    query_generic,
-                    current_cpu_score=current_cpu_score,
-                )
-                data = result.data()
-            
-            return data
+            return result.data()
 
 
 def _build_machine_payload(record):
@@ -236,34 +124,33 @@ def _build_machine_payload(record):
 
 def get_random_pc_profile(exclude_signatures=None):
     excluded = exclude_signatures or []
-    # Query simplificada: busca um processador e uma placa-mãe compatível
     query = """
-    MATCH (cpu:Processor)-[:FITS_IN]->(s:Socket)<-[:HAS_SOCKET]-(mb:Motherboard)
-    WHERE mb.type = "Desktop"
-    WITH cpu, mb, cpu.name + '|' + mb.name AS signature
+    MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
+    WITH cpu, mb, gpu, cpu.nome + '|' + mb.nome + '|' + gpu.nome AS signature
     WHERE NOT signature IN $excluded
     RETURN
-      cpu.name AS cpu_name,
-      coalesce(cpu.type, '') AS cpu_tier,
-      coalesce(cpu.socket, '') AS socket,
-      mb.name AS mb_name,
-      coalesce(mb.socket, '') AS ram_type,
-      "GPU Integrada" AS gpu_name,
-      "Integrada" AS gpu_tier
+      cpu.nome AS cpu_name,
+      coalesce(cpu.performance, '') AS cpu_tier,
+      coalesce(cpu.soquete, '') AS socket,
+      mb.nome AS mb_name,
+      coalesce(mb.pci_express, '') AS ram_type,
+      gpu.nome AS gpu_name,
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
     fallback_query = """
-    MATCH (cpu:Processor)-[:FITS_IN]->(s:Socket)<-[:HAS_SOCKET]-(mb:Motherboard)
-    WHERE mb.type = "Desktop"
+    MATCH (cpu:Processador)-[:COMPATIVEL_COM]->(mb:PlacaMae)
+    MATCH (gpu:GPU)-[:COMPATIVEL_COM]->(mb)
     RETURN
-      cpu.name AS cpu_name,
-      coalesce(cpu.type, '') AS cpu_tier,
-      coalesce(cpu.socket, '') AS socket,
-      mb.name AS mb_name,
-      coalesce(mb.socket, '') AS ram_type,
-      "GPU Integrada" AS gpu_name,
-      "Integrada" AS gpu_tier
+      cpu.nome AS cpu_name,
+      coalesce(cpu.performance, '') AS cpu_tier,
+      coalesce(cpu.soquete, '') AS socket,
+      mb.nome AS mb_name,
+      coalesce(mb.pci_express, '') AS ram_type,
+      gpu.nome AS gpu_name,
+      coalesce(gpu.performance, '') AS gpu_tier
     ORDER BY rand()
     LIMIT 1
     """
