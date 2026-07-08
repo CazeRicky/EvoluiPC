@@ -2,10 +2,10 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
-from .neo4j_http_driver import Neo4jHttpError as Neo4jError
+from neo4j.exceptions import Neo4jError
 
 from .neo4j_identity import Neo4jUser
-from .views import AuthMeView, LoginView, LogoutView, MachineCurrentView, MachineSyncView, RecommendationView, RegisterView, UpgradeRouteView
+from .views import AuthMeView, LoginView, LogoutView, MachineCurrentView, MachineSyncView, RecommendationView, RegisterView
 
 
 class Neo4jIdentityFlowTests(SimpleTestCase):
