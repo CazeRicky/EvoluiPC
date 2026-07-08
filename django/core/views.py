@@ -1,5 +1,5 @@
 import logging
-from .neo4j_http_driver import Neo4jHttpError as Neo4jError, ServiceUnavailable
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
