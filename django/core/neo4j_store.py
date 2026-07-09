@@ -46,9 +46,9 @@ def _user_attr(user, key, default=""):
 def get_all_cpus():
     """Busca todos os processadores disponíveis"""
     query = """
-    MATCH (cpu:Processador)
-    RETURN cpu.nome, cpu.soquete, cpu.tdp, cpu.performance
-    ORDER BY cpu.nome
+    MATCH (cpu:Processor)
+    RETURN cpu.name AS name, cpu.socket AS socket, cpu.tdp AS tdp, cpu.performance_score AS performance_score
+    ORDER BY cpu.name
     """
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
@@ -59,23 +59,23 @@ def get_all_cpus():
 def get_all_gpus():
     """Busca todas as GPUs disponíveis"""
     query = """
-    MATCH (gpu:GPU)
-    RETURN gpu.nome, gpu.arquitetura, gpu.vram, gpu.tdp, gpu.performance
-    ORDER BY gpu.nome
+    MATCH (gpu:Gpu)
+    RETURN gpu.name AS name, gpu.interface AS interface, gpu.memory_gb AS memory_gb, gpu.power_watts AS power_watts, gpu.performance_score AS performance_score
+    ORDER BY gpu.name
     """
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
             results = session.run(query).data()
             return results if results else []
 
-def get_gpu_compatibility(gpu_nome):
+def get_gpu_compatibility(gpu_name):
     query = """
-    MATCH (gpu:GPU {nome: $gpu_nome})-[rel:COMPATIVEL_COM]->(mobo:PlacaMae)
-    RETURN gpu.nome, mobo.nome, mobo.pci_express, rel.slot_requerido
+    MATCH (gpu:Gpu {name: $gpu_name})-[rel:COMPATIBLE_WITH]->(mobo:Motherboard)
+    RETURN gpu.name AS gpu_name, mobo.name AS motherboard_name, rel.slot_required AS slot_required, rel.pcie_version AS pcie_version
     """
     with get_driver() as driver:
         with driver.session(database=NEO4J_DATABASE) as session:
-            results = session.run(query, gpu_nome=gpu_nome).data()
+            results = session.run(query, gpu_name=gpu_name).data()
             return results if results else []
 
 def get_cpu_performance_score(cpu_name):
@@ -209,6 +209,88 @@ def get_upgrade_recommendation(current_cpu_name, current_cpu_score):
                 )
                 data = result.data()
             
+            return data
+
+
+def _estimate_gpu_score(gpu_name):
+    """Gera um score aproximado para uma GPU quando o nome não está no grafo."""
+    if not gpu_name:
+        return 8000
+    name_upper = str(gpu_name).upper()
+    if "RTX 4090" in name_upper:
+        return 32000
+    if "RTX 4080" in name_upper:
+        return 28000
+    if "RTX 4070" in name_upper:
+        return 24000
+    if "RTX 4060" in name_upper:
+        return 18000
+    if "RTX 3060" in name_upper:
+        return 16000
+    if "RTX 2060" in name_upper:
+        return 12000
+    if "1660" in name_upper:
+        return 9000
+    if "1650" in name_upper:
+        return 7000
+    if "RX 7600" in name_upper:
+        return 17000
+    if "RX 6600" in name_upper:
+        return 14000
+    if "RX 570" in name_upper:
+        return 8000
+    return 8000
+
+
+def assess_cpu_gpu_bottleneck(cpu_score, gpu_score):
+    """Avalia se o processador é um gargalo para a GPU atual."""
+    cpu_score = int(cpu_score or 4500)
+    gpu_score = int(gpu_score or 8000)
+    if gpu_score >= 24000 and cpu_score < 7000:
+        return {"status": "high", "is_cpu_bottleneck": True, "reason": "Seu processador é um gargalo importante para uma placa de vídeo de alto desempenho."}
+    if gpu_score >= 16000 and cpu_score < 9000:
+        return {"status": "medium", "is_cpu_bottleneck": True, "reason": "Seu processador pode limitar o ganho de uma placa de vídeo mais potente."}
+    return {"status": "low", "is_cpu_bottleneck": False, "reason": "Seu processador ainda pode acompanhar bem a placa de vídeo sugerida."}
+
+
+def get_gpu_upgrade_recommendation(current_cpu_name, current_cpu_score, current_gpu_name=None, current_motherboard_name=None):
+    """Busca uma recomendação real de GPU baseada em gargalo de CPU, compatibilidade com a placa-mãe e custo-benefício."""
+    current_cpu_score = int(current_cpu_score or 4500)
+    current_gpu_name = current_gpu_name or "GTX 1650"
+    current_gpu_score = _estimate_gpu_score(current_gpu_name)
+    bottleneck = assess_cpu_gpu_bottleneck(current_cpu_score, current_gpu_score)
+
+    query_specific = """
+    MATCH (mb:Motherboard {name: $current_motherboard_name})<-[:COMPATIBLE_WITH]-(gpu:Gpu)
+    WHERE gpu.performance_score > $current_gpu_score
+    WITH gpu, (toFloat(gpu.performance_score) / gpu.price) AS cost_benefit_ratio
+    RETURN gpu.name AS recommendation, gpu.price AS price, gpu.performance_score AS performance_score, gpu.power_watts AS power_watts, gpu.memory_gb AS memory_gb, gpu.interface AS interface
+    ORDER BY cost_benefit_ratio DESC
+    LIMIT 1
+    """
+    query_generic = """
+    MATCH (gpu:Gpu)
+    WHERE gpu.performance_score > $current_gpu_score AND gpu.type = "Desktop"
+    WITH gpu, (toFloat(gpu.performance_score) / gpu.price) AS cost_benefit_ratio
+    RETURN gpu.name AS recommendation, gpu.price AS price, gpu.performance_score AS performance_score, gpu.power_watts AS power_watts, gpu.memory_gb AS memory_gb, gpu.interface AS interface
+    ORDER BY cost_benefit_ratio DESC
+    LIMIT 1
+    """
+
+    with get_driver() as driver:
+        with driver.session(database=NEO4J_DATABASE) as session:
+            data = []
+            if current_motherboard_name:
+                result = session.run(query_specific, current_motherboard_name=current_motherboard_name, current_gpu_score=current_gpu_score)
+                data = result.data()
+            if not data:
+                result = session.run(query_generic, current_gpu_score=current_gpu_score)
+                data = result.data()
+            if data:
+                first = data[0]
+                first["bottleneck"] = bottleneck["status"]
+                first["is_cpu_bottleneck"] = bottleneck["is_cpu_bottleneck"]
+                first["bottleneck_reason"] = bottleneck["reason"]
             return data
 
 

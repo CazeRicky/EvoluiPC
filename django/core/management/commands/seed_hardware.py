@@ -54,6 +54,32 @@ class Command(BaseCommand):
                 CREATE (mbnt:Motherboard {name: "Placa-mãe Notebook", socket: "BGA1744", type: "Laptop"})
             """)
 
+            # Criar GPUs Desktop e relacionar com placas-mãe
+            self.stdout.write("Criando GPUs Desktop...")
+            session.run("""
+                MATCH (mb:Motherboard {name: "A320M"})
+                MERGE (gpu1:Gpu {name: "GTX 1650", type: "Desktop", performance_score: 7000, price: 250.00, power_watts: 75, memory_gb: 4, interface: "PCIe 3.0"})
+                MERGE (gpu2:Gpu {name: "RTX 2060", type: "Desktop", performance_score: 12000, price: 650.00, power_watts: 160, memory_gb: 6, interface: "PCIe 3.0"})
+                MERGE (gpu3:Gpu {name: "RTX 3060", type: "Desktop", performance_score: 16000, price: 1200.00, power_watts: 170, memory_gb: 12, interface: "PCIe 4.0"})
+                MERGE (gpu4:Gpu {name: "RTX 4060", type: "Desktop", performance_score: 18000, price: 2200.00, power_watts: 115, memory_gb: 8, interface: "PCIe 4.0"})
+                CREATE (gpu1)-[:COMPATIBLE_WITH {slot_required: "PCIe x16", pcie_version: "PCIe 3.0"}]->(mb)
+                CREATE (gpu2)-[:COMPATIBLE_WITH {slot_required: "PCIe x16", pcie_version: "PCIe 3.0"}]->(mb)
+                CREATE (gpu3)-[:COMPATIBLE_WITH {slot_required: "PCIe x16", pcie_version: "PCIe 4.0"}]->(mb)
+                CREATE (gpu4)-[:COMPATIBLE_WITH {slot_required: "PCIe x16", pcie_version: "PCIe 4.0"}]->(mb)
+            """)
+
+            session.run("""
+                MATCH (mb:Motherboard {name: "B660M"})
+                MATCH (gpu:Gpu {name: "RTX 3060"})
+                CREATE (gpu)-[:COMPATIBLE_WITH {slot_required: "PCIe x16", pcie_version: "PCIe 4.0"}]->(mb)
+            """)
+
+            session.run("""
+                MATCH (mb:Motherboard {name: "Z790"})
+                MATCH (gpu:Gpu {name: "RTX 4060"})
+                CREATE (gpu)-[:COMPATIBLE_WITH {slot_required: "PCIe x16", pcie_version: "PCIe 4.0"}]->(mb)
+            """)
+
             # Criar processadores Desktop Intel LGA1700 - Geração 10-13
             self.stdout.write("Criando processadores Desktop Intel...")
             session.run("""
