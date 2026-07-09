@@ -4,6 +4,8 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
+# Importe a função que você acabou de criar no neo4j_store
+from .neo4j_store import get_upgrade_recommendation, get_cpu_performance_score, detect_device_type, get_fallback_upgrade_for_device, get_gpu_upgrade_recommendation
 
 from .neo4j_store import (
     get_upgrade_recommendation,
@@ -280,6 +282,15 @@ class MachineCurrentView(APIView):
         )
 
 
+# Compat shim para rotas anteriores.
+class UpgradeRouteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return upgrade_route_me(request)
+
+
+# Endpoint de recomendacoes.
 class RecommendationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -391,6 +402,84 @@ def upgrade_route_me(request):
                 "estimatedPrice": fallback_info.get("score", 4500) * 0.1,
                 "source": "fallback",
             }]
+
+    return Response(response_data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def gpu_upgrade_route_me(request):
+    """Endpoint para recomendar uma placa de vídeo com análise de gargalo de CPU e compatibilidade de placa-mãe."""
+    try:
+        user_pc_data = get_user_pc_parts(request.user.id)
+        if user_pc_data and user_pc_data.get("machine"):
+            current_cpu_name = user_pc_data["machine"].get("cpu", "Intel i5-10400")
+            current_mb = user_pc_data["machine"].get("motherboard", "A320M")
+            current_gpu_name = user_pc_data["machine"].get("gpu", "GTX 1650")
+            current_score = get_cpu_performance_score(current_cpu_name)
+        else:
+            current_cpu_name = "Intel i5-10400"
+            current_mb = "A320M"
+            current_gpu_name = "GTX 1650"
+            current_score = get_cpu_performance_score(current_cpu_name)
+
+        device_type = detect_device_type(current_cpu_name)
+    except Exception as e:
+        logger.exception("Erro ao montar rota de GPU")
+        device_type = "Desktop"
+        current_cpu_name = "Intel i5-10400"
+        current_mb = "A320M"
+        current_gpu_name = "GTX 1650"
+        current_score = 4500
+
+    if device_type == "Mac":
+        return Response([{
+            "component": "Placa de Vídeo",
+            "device_type": "Mac",
+            "recommendation": "Não aplicável",
+            "reason": "Dispositivos Mac com Apple Silicon não permitem upgrade de GPU de forma simples.",
+            "estimatedPrice": 0,
+            "source": "fallback",
+            "is_cpu_bottleneck": False,
+        }], status=status.HTTP_200_OK)
+
+    try:
+        gpu_data = get_gpu_upgrade_recommendation(current_cpu_name, current_score, current_gpu_name, current_mb)
+    except Exception as e:
+        logger.exception("Erro ao buscar recomendação de GPU")
+        gpu_data = []
+
+    if gpu_data and len(gpu_data) > 0:
+        recommendation = gpu_data[0]
+        response_data = [{
+            "id": 2,
+            "component": "Placa de Vídeo",
+            "device_type": device_type,
+            "recommendation": recommendation.get("recommendation", "N/A"),
+            "reason": recommendation.get("bottleneck_reason", "Recomendação baseada em compatibilidade com a placa-mãe e gargalo de CPU."),
+            "estimatedPrice": recommendation.get("price", 0),
+            "source": "neo4j",
+            "bottleneck": recommendation.get("bottleneck", "low"),
+            "is_cpu_bottleneck": recommendation.get("is_cpu_bottleneck", False),
+            "compatibleWithMotherboard": True,
+            "details": {
+                "powerWatts": recommendation.get("power_watts"),
+                "memoryGb": recommendation.get("memory_gb"),
+                "interface": recommendation.get("interface"),
+            },
+        }]
+    else:
+        response_data = [{
+            "id": 2,
+            "component": "Placa de Vídeo",
+            "device_type": device_type,
+            "recommendation": "RTX 4060",
+            "reason": "Recomendação de referência para um upgrade de vídeo quando o Neo4j não retornar uma opção compatível.",
+            "estimatedPrice": 1800,
+            "source": "fallback",
+            "bottleneck": "high",
+            "is_cpu_bottleneck": True,
+            "compatibleWithMotherboard": True,
+        }]
 
     return Response(response_data, status=status.HTTP_200_OK)
 
