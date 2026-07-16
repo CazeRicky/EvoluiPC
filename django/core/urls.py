@@ -10,12 +10,12 @@ from .views import (
     MachineSyncView,
     RecommendationView,
     RegisterView,
-    ScanHistoryView,
     upgrade_route_me,
     gpu_upgrade_route_me,
     list_cpus,
     list_gpus,
     gpu_compatibility,
+    get_component_offers,
 )
 
 def home(request):
@@ -42,4 +42,5 @@ urlpatterns = [
     path("hardware/cpus", list_cpus, name="list-cpus"),
     path("hardware/gpus", list_gpus, name="list-gpus"),
     path("hardware/gpu/<str:gpu_name>/compatibility", gpu_compatibility, name="gpu-compatibility"),
+    path("hardware/offers", get_component_offers, name="hardware-offers"),
 ]

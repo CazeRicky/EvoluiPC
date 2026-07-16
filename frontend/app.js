@@ -266,6 +266,7 @@ function renderCatalog() {
       <h3>${item.name  || "N/A"}</h3>
       <p>${item.tag   || "Sem tag"}</p>
       <p class="catalog-meta">${item.price  || "Preço indisponível"} · ${item.source || "Fonte não informada"}</p>
+      ${item.name ? `<button class="primary-btn" onclick="abrirModalOfertas('${item.name.replace(/'/g, "\\'")}')" style="margin-top:12px;width:100%;font-size:0.85rem;padding:8px 12px;border-radius:10px;cursor:pointer;">🛒 Comparar Ofertas</button>` : ""}
     `;
     catalogGrid.appendChild(card);
   });
@@ -877,7 +878,35 @@ async function carregarRotaUpgrade() {
             <p style="margin:12px 0;color:#a0a0a0;line-height:1.6;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
             ${upgrade.device_type ? `<p style="margin:8px 0;color:#808080;font-size:13px;">📱 Dispositivo: <strong style="color:${sourceBorderColor};">${upgrade.device_type}</strong></p>` : ""}
             ${upgrade.note ? `<p style="margin:8px 0;color:#ffcccc;font-size:13px;background:#332222;padding:8px 12px;border-radius:4px;border-left:3px solid #ff6b6b;">⚠️ ${upgrade.note}</p>` : ""}
+            
+            <div class="offers-section">
+              <h4 class="offers-title">🛒 Melhores Preços Online (Tempo Real):</h4>
+              <div id="upgradeOffersGrid" class="offers-grid">
+                <div style="grid-column: 1/-1; color: var(--ink-soft); font-size: 0.9rem; padding: 12px 0;">
+                  <span class="loader" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:8px;border-width:2px;"></span>
+                  Pesquisando ofertas nas lojas...
+                </div>
+              </div>
+            </div>
           </div>`;
+
+        // Async fetch for real-time offers
+        const recName = upgrade.recommendation;
+        setTimeout(async () => {
+          try {
+            const data = await fetchOffersForHardware(recName);
+            const grid = document.getElementById("upgradeOffersGrid");
+            if (grid) {
+              renderOffersIntoContainer(grid, data?.offers || []);
+            }
+          } catch (err) {
+            console.error("Erro ao carregar ofertas do upgrade recomendado:", err);
+            const grid = document.getElementById("upgradeOffersGrid");
+            if (grid) {
+              grid.innerHTML = `<p style="color:var(--warn);font-size:0.9rem;grid-column:1/-1;">Falha ao carregar ofertas em tempo real.</p>`;
+            }
+          }
+        }, 50);
       } else {
         const sourceLabel = upgrade.source === "neo4j" ? "🗄️ Base de Dados" : "📋 Recomendação Padrão";
         const sourceBgColor = upgrade.source === "neo4j" ? "#0d1b2a" : "#1a1410";
@@ -1006,3 +1035,139 @@ async function initializeApp() {
 }
 
 initializeApp();
+
+
+async function fetchOffersForHardware(name) {
+  const token = getStoredToken();
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Token ${token}`;
+  }
+  
+  const response = await fetch(
+    `${BACKEND_URL}/api/hardware/offers?query=${encodeURIComponent(name)}`,
+    {
+      method: "GET",
+      headers: headers,
+    }
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Erro status: ${response.status}`);
+  }
+  
+  return await response.json();
+}
+
+function renderOffersIntoContainer(container, offers) {
+  container.innerHTML = "";
+  
+  if (!offers || offers.length === 0) {
+    container.innerHTML = `<p style="color:var(--ink-soft);grid-column: 1/-1;font-size:0.9rem;padding: 12px 0;">Nenhuma oferta encontrada para esta peça no momento.</p>`;
+    return;
+  }
+  
+  offers.forEach(offer => {
+    const card = document.createElement("div");
+    card.className = "offer-card";
+    
+    // Normalize class name for store badge
+    let storeClass = (offer.store || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (storeClass.includes("mercadolivre")) storeClass = "mercadolivre";
+    if (storeClass.includes("amazon")) storeClass = "amazon";
+    if (storeClass.includes("kabum")) storeClass = "kabum";
+    if (storeClass.includes("pichau")) storeClass = "pichau";
+    if (storeClass.includes("terabyte")) storeClass = "terabyteshop";
+    
+    const fallbackImage = "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?w=150&auto=format&fit=crop&q=60";
+    const thumbUrl = offer.thumbnail || fallbackImage;
+    
+    const formattedPrice = typeof offer.price === "number" 
+      ? offer.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      : `R$ ${offer.price}`;
+      
+    const liveIndicator = offer.is_live 
+      ? `<span style="font-size: 0.65rem; color: #34d399; position: absolute; top: 12px; right: 12px; background: rgba(52,211,153,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">● LIVE</span>`
+      : `<span style="font-size: 0.65rem; color: #f59e0b; position: absolute; top: 12px; right: 12px; background: rgba(245,158,11,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">● ESTIMADO</span>`;
+      
+    card.innerHTML = `
+      ${liveIndicator}
+      <div class="offer-header">
+        <div class="offer-thumb-container">
+          <img class="offer-thumb" src="${thumbUrl}" alt="Thumbnail" onerror="this.src='${fallbackImage}'" />
+        </div>
+        <span class="offer-store-badge ${storeClass}">${offer.store}</span>
+      </div>
+      <h5 class="offer-title" title="${offer.title}">${offer.title}</h5>
+      <div class="offer-price-container">
+        <span class="offer-price">${formattedPrice}</span>
+        <a href="${offer.link}" target="_blank" class="offer-buy-btn">Comprar ➔</a>
+      </div>
+    `;
+    
+    container.appendChild(card);
+  });
+}
+
+async function abrirModalOfertas(name) {
+  
+  fecharModalOfertas();
+  
+  
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "ep-modal-overlay";
+  modalOverlay.id = "epOffersModal";
+  
+  modalOverlay.innerHTML = `
+    <div class="ep-modal-container">
+      <div class="ep-modal-header">
+        <h3>Melhores Ofertas: ${name}</h3>
+        <button class="ep-modal-close" onclick="fecharModalOfertas()">&times;</button>
+      </div>
+      <div class="ep-modal-body">
+        <div id="modalOffersGrid" class="offers-grid">
+          <div style="grid-column: 1/-1; text-align: center; color: var(--ink-soft); padding: 40px 0;">
+            <div class="loader" style="margin: 0 auto 16px auto; border-width:2px; width:30px; height:30px;"></div>
+            Buscando os melhores preços na internet...
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modalOverlay);
+  
+  
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) {
+      fecharModalOfertas();
+    }
+  });
+  
+  try {
+    const data = await fetchOffersForHardware(name);
+    const grid = document.getElementById("modalOffersGrid");
+    if (grid) {
+      renderOffersIntoContainer(grid, data?.offers || []);
+    }
+  } catch (err) {
+    console.error("Erro ao carregar ofertas no modal:", err);
+    const grid = document.getElementById("modalOffersGrid");
+    if (grid) {
+      grid.innerHTML = `<p style="color:var(--warn);grid-column: 1/-1;text-align:center;padding:24px 0;">Erro ao carregar ofertas em tempo real. Tente novamente mais tarde.</p>`;
+    }
+  }
+}
+
+function fecharModalOfertas() {
+  const modal = document.getElementById("epOffersModal");
+  if (modal) {
+    modal.remove();
+  }
+}
+
+
+window.abrirModalOfertas = abrirModalOfertas;
+window.fecharModalOfertas = fecharModalOfertas;
