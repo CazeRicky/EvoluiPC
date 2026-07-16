@@ -21,122 +21,87 @@ def clean_price_string(price_str):
     except ValueError:
         return 0.0
 
-def scrape_mercado_livre(query):
-    """Raspa ofertas do Mercado Livre."""
-    offers = []
+def get_db_price_for_hardware(name):
+    """Busca o preço estimado do componente no Neo4j local para garantir condizência."""
+    query = """
+    MATCH (h)
+    WHERE (h:Processor OR h:Gpu OR h:Motherboard OR h:PlacaMae OR h:PlacaDeVideo OR h:Processador)
+      AND toLower(h.name) CONTAINS toLower($name)
+    RETURN h.price AS price, h.preco AS preco
+    LIMIT 1
+    """
     try:
-        encoded_query = urllib.parse.quote(query)
-        url = f"https://lista.mercadolivre.com.br/{encoded_query}"
-        
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
-            return []
-            
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        
-        items = soup.find_all("li", class_="ui-search-layout__item")
-        if not items:
-            
-            items = soup.find_all("div", class_="ui-search-result__wrapper")
-            
-        for item in items[:4]:  
-            
-            title_el = item.find("h2", class_="ui-search-item__title")
-            if not title_el:
-                title_el = item.find("h3", class_="ui-search-item__title")
-            title = title_el.text.strip() if title_el else query
-
-            
-            link_el = item.find("a", class_="ui-search-link")
-            link = link_el["href"] if link_el and "href" in link_el.attrs else "#"
-
-            
-            price_fraction = item.find("span", class_="andes-money-amount__fraction")
-            price_cents = item.find("span", class_="andes-money-amount__cents")
-            
-            if price_fraction:
-                price_str = price_fraction.text.strip()
-                if price_cents:
-                    price_str += f",{price_cents.text.strip()}"
-                price = clean_price_string(price_str)
-            else:
-                price = 0.0
-
-            
-            img_el = item.find("img", class_="ui-search-result-image__element")
-            if not img_el:
-                img_el = item.find("img", class_="poly-component__picture")
-            
-            thumbnail = ""
-            if img_el:
-                
-                thumbnail = img_el.get("data-src") or img_el.get("src") or ""
-
-            if title and price > 0:
-                offers.append({
-                    "store": "Mercado Livre (Oficial)",
-                    "title": title,
-                    "price": price,
-                    "link": link,
-                    "thumbnail": thumbnail,
-                    "is_live": True
-                })
-    except Exception as e:
-        
-        pass
-    return offers
-
-def scrape_amazon(query):
-    """Raspa ofertas da Amazon Brasil."""
-    offers = []
-    try:
-        encoded_query = urllib.parse.quote(query)
-        url = f"https://www.amazon.com.br/s?k={encoded_query}"
-        
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
-            return []
-            
-        soup = BeautifulSoup(response.text, "html.parser")
-        items = soup.find_all("div", {"data-component-type": "s-search-result"})
-        
-        for item in items[:3]:  # Limita aos 3 primeiros
-            # Título
-            title_el = item.find("span", class_="a-size-base-plus") or item.find("span", class_="a-size-medium")
-            title = title_el.text.strip() if title_el else query
-
-            # Link
-            link_el = item.find("a", class_="a-link-normal")
-            link = "https://www.amazon.com.br" + link_el["href"] if link_el and "href" in link_el.attrs else "#"
-
-            # Preço
-            price_whole = item.find("span", class_="a-price-whole")
-            price_fraction = item.find("span", class_="a-price-fraction")
-            if price_whole:
-                price_str = price_whole.text.strip().replace(".", "")
-                if price_fraction:
-                    price_str += f",{price_fraction.text.strip()}"
-                price = clean_price_string(price_str)
-            else:
-                price = 0.0
-
-            # Imagem
-            img_el = item.find("img", class_="s-image")
-            thumbnail = img_el["src"] if img_el and "src" in img_el.attrs else ""
-
-            if title and price > 0:
-                offers.append({
-                    "store": "Amazon",
-                    "title": title,
-                    "price": price,
-                    "link": link,
-                    "thumbnail": thumbnail,
-                    "is_live": True
-                })
+        from .neo4j_store import get_driver, NEO4J_DATABASE
+        with get_driver() as driver:
+            with driver.session(database=NEO4J_DATABASE) as session:
+                record = session.run(query, name=name).single()
+                if record:
+                    p = record.get("price") or record.get("preco")
+                    if p:
+                        return float(p)
     except Exception:
         pass
-    return offers
+    return None
+
+def extract_price_from_text(text):
+    """Tenta extrair um valor de preço (R$) de um texto de snippet."""
+    if not text:
+        return None
+    match = re.search(r"R\$\s*([0-9]+(?:\.[0-9]{3})*(?:,[0-9]{2})?)", text)
+    if match:
+        return clean_price_string(match.group(1))
+    return None
+
+def get_exact_link_and_price_from_ddg(store_domain, query):
+    """
+    Busca no DuckDuckGo a página exata do produto e tenta obter o preço real no snippet.
+    """
+    search_query = f"site:{store_domain} {query}"
+    encoded_query = urllib.parse.quote(search_query)
+    url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
+    
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=8, verify=False)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            results = soup.find_all("div", class_="result")
+            
+            for r in results:
+                # Extrai o link
+                link_el = r.find("a", class_="result__url")
+                if not link_el:
+                    link_el = r.find("a", href=True)
+                if not link_el:
+                    continue
+                    
+                href = link_el.get("href", "")
+                if "/l/?uddg=" in href:
+                    actual_url = href.split("/l/?uddg=")[1].split("&")[0]
+                    actual_url = urllib.parse.unquote(actual_url)
+                    
+                    url_lower = actual_url.lower()
+                    if store_domain in url_lower:
+                        # Valida se é link direto de produto
+                        if "kabum.com.br" in url_lower and "/produto/" not in url_lower:
+                            continue
+                        if "pichau.com.br" in url_lower and "/produto/" not in url_lower and "/p/" not in url_lower:
+                            continue
+                        if "terabyteshop.com.br" in url_lower and "/produto/" not in url_lower:
+                            continue
+                        if "amazon.com.br" in url_lower and "/dp/" not in url_lower and "/gp/" not in url_lower:
+                            if "/product/" not in url_lower:
+                                continue
+                                
+                        # Tenta obter o preço do snippet correspondente
+                        price = None
+                        snippet_el = r.find("a", class_="result__snippet")
+                        if snippet_el:
+                            price = extract_price_from_text(snippet_el.text)
+                            
+                        return actual_url, price
+    except Exception:
+        pass
+    return None, None
 
 def get_base_price_by_hardware_name(name):
     """Estima um preço base realista baseado no nome do hardware para gerar ofertas fallback coerentes."""
@@ -188,106 +153,90 @@ def get_base_price_by_hardware_name(name):
 
     return 600.00  # Default fallback
 
-def generate_fallback_offers(query):
-    """Gera ofertas fallback de alta fidelidade simulando Kabum, Pichau e Terabyte."""
-    base_price = get_base_price_by_hardware_name(query)
-    
-    stores_info = [
-        {
-            "store": "KaBuM!",
-            "title_template": "{query} - Excelente Custo Benefício",
-            "price_multiplier": 0.95,  # Desconto no Pix
-            "link_template": "https://www.kabum.com.br/busca?query={query_slug}",
-            "thumbnail": "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?w=150&auto=format&fit=crop&q=60" # CPU/Tech image
-        },
-        {
-            "store": "Pichau",
-            "title_template": "{query} em Promoção Especial",
-            "price_multiplier": 0.94,
-            "link_template": "https://www.pichau.com.br/search?q={query_slug}",
-            "thumbnail": "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=150&auto=format&fit=crop&q=60"
-        },
-        {
-            "store": "TerabyteShop",
-            "title_template": "{query} Gamer Edition",
-            "price_multiplier": 0.96,
-            "link_template": "https://www.terabyteshop.com.br/busca?str={query_slug}",
-            "thumbnail": "https://images.unsplash.com/photo-1600121848594-d8644e57abab?w=150&auto=format&fit=crop&q=60"
-        },
-        {
-            "store": "Amazon",
-            "title_template": "{query} - Vendido e Entregue por Amazon",
-            "price_multiplier": 1.02,
-            "link_template": "https://www.amazon.com.br/s?k={query_slug}",
-            "thumbnail": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=60"
-        }
-    ]
-    
-    query_slug = urllib.parse.quote_plus(query)
-    fallback_offers = []
-    
-    for info in stores_info:
-        # Preço final com variação aleatória de +/- 3%
-        variation = random.uniform(0.97, 1.03)
-        final_price = round(base_price * info["price_multiplier"] * variation, 2)
-        
-        fallback_offers.append({
-            "store": info["store"],
-            "title": info["title_template"].format(query=query),
-            "price": final_price,
-            "link": info["link_template"].format(query_slug=query_slug),
-            "thumbnail": info["thumbnail"],
-            "is_live": False
-        })
-        
-    # Ordena pelo melhor preço (menor primeiro)
-    fallback_offers.sort(key=lambda x: x["price"])
-    return fallback_offers
-
 def get_best_offers(query):
-    """Busca ofertas na internet e complementa com ofertas simuladas de alta qualidade se necessário."""
+    """Busca as melhores ofertas para o hardware e retorna links exatos das páginas dos produtos."""
     if not query or len(query.strip()) < 2:
         return []
         
     query_cleaned = query.strip()
     
-    # 1. Tenta raspar Mercado Livre
-    ml_offers = scrape_mercado_livre(query_cleaned)
-    
-    # 2. Tenta raspar Amazon
-    amazon_offers = scrape_amazon(query_cleaned)
-    
-    live_offers = ml_offers + amazon_offers
-    
-    # Remove duplicados baseados no link ou título
-    seen_links = set()
-    unique_live = []
-    for offer in live_offers:
-        if offer["link"] not in seen_links:
-            seen_links.add(offer["link"])
-            unique_live.append(offer)
-            
-    # Se obtivemos resultados online válidos, retornamos eles
-    if len(unique_live) >= 3:
-        # Ordena pelo menor preço
-        unique_live.sort(key=lambda x: x["price"])
-        return unique_live[:6]
+    # Tenta buscar preço da peça no banco Neo4j para alinhar os valores estimados
+    base_price = get_db_price_for_hardware(query_cleaned)
+    if not base_price:
+        base_price = get_base_price_by_hardware_name(query_cleaned)
         
-    # Se não temos resultados reais suficientes, combinamos com fallbacks de lojas famosas (Kabum, Pichau, Terabyte)
-    # Isso garante que a UI sempre estará linda e operacional
-    fallbacks = generate_fallback_offers(query_cleaned)
+    stores_info = [
+        {
+            "store": "KaBuM!",
+            "domain": "kabum.com.br",
+            "title_template": "{query} - Oficial KaBuM!",
+            "price_multiplier": 0.95,  # Desconto no Pix
+            "search_fallback": "https://www.kabum.com.br/busca?query={slug}",
+            "thumbnail": "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?w=150&auto=format&fit=crop&q=60"
+        },
+        {
+            "store": "Pichau",
+            "domain": "pichau.com.br",
+            "title_template": "{query} - Oficial Pichau",
+            "price_multiplier": 0.94,
+            "search_fallback": "https://www.pichau.com.br/search?q={slug}",
+            "thumbnail": "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=150&auto=format&fit=crop&q=60"
+        },
+        {
+            "store": "TerabyteShop",
+            "domain": "terabyteshop.com.br",
+            "title_template": "{query} - Oficial TerabyteShop",
+            "price_multiplier": 0.96,
+            "search_fallback": "https://www.terabyteshop.com.br/busca?str={slug}",
+            "thumbnail": "https://images.unsplash.com/photo-1600121848594-d8644e57abab?w=150&auto=format&fit=crop&q=60"
+        },
+        {
+            "store": "Amazon",
+            "domain": "amazon.com.br",
+            "title_template": "{query} - Vendido e Entregue por Amazon",
+            "price_multiplier": 1.02,
+            "search_fallback": "https://www.amazon.com.br/s?k={slug}",
+            "thumbnail": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=60"
+        }
+    ]
     
-    # Combina live_offers com fallbacks, garantindo lojas variadas
-    combined = unique_live + fallbacks
-    seen_stores = set()
+    query_slug = urllib.parse.quote_plus(query_cleaned)
     final_offers = []
     
-    # Prioriza os reais
-    for offer in combined:
-        store_key = f"{offer['store']}-{offer['title']}"
-        if store_key not in seen_stores:
-            seen_stores.add(store_key)
-            final_offers.append(offer)
+    for info in stores_info:
+        # Busca no DuckDuckGo pelo link da página exata do produto no domínio da loja
+        exact_link, live_price = get_exact_link_and_price_from_ddg(info["domain"], query_cleaned)
+        
+        # Define o link
+        is_live = False
+        if exact_link:
+            link = exact_link
+            is_live = True
+        else:
+            # Fallback para o link da pesquisa interna caso não encontre link exato
+            link = info["search_fallback"].format(slug=query_slug)
             
+        # Define o preço
+        if is_live and live_price and abs(live_price - base_price) < (base_price * 0.4):
+            # Se encontramos um preço real e ele é condizente com a estimativa do banco (+/- 40%)
+            price = live_price
+        else:
+            # Senão, calcula preço condizente baseado no banco de dados + variação de mercado da loja (+/- 2.5%)
+            variation = random.uniform(0.975, 1.025)
+            price = round(base_price * info["price_multiplier"] * variation, 2)
+            
+        # Ajusta título
+        title = info["title_template"].format(query=query_cleaned)
+        
+        final_offers.append({
+            "store": info["store"],
+            "title": title,
+            "price": price,
+            "link": link,
+            "thumbnail": info["thumbnail"],
+            "is_live": is_live
+        })
+        
+    # Ordena pelo menor preço
     final_offers.sort(key=lambda x: x["price"])
-    return final_offers[:6]
+    return final_offers

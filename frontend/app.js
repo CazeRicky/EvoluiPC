@@ -44,6 +44,8 @@ let catalogMeta = {
 };
 
 let autoFetchInterval = null;
+let currentCatalogFilter = "all";
+
 
 function startAutoFetch() {
   if (autoFetchInterval) return;
@@ -241,32 +243,79 @@ function renderRoute() {
   });
 }
 
+function classifyItem(item) {
+  const name = (item.name || "").toLowerCase();
+  const tag = (item.tag || "").toLowerCase();
+  
+  if (name.includes("ryzen") || name.includes("core") || name.includes("intel") || name.includes("amd ryzen") || name.includes("i3-") || name.includes("i5-") || name.includes("i7-") || name.includes("i9-") || tag.includes("cpu") || tag.includes("processador")) {
+    return { id: "cpu", label: "Processador", icon: "🖥️", color: "#3b82f6" };
+  }
+  if (name.includes("rtx") || name.includes("gtx") || name.includes("rx ") || name.includes("radeon") || name.includes("geforce") || name.includes("placa de video") || name.includes("placa de vídeo") || tag.includes("gpu") || tag.includes("placa de video") || tag.includes("video")) {
+    return { id: "gpu", label: "Placa de Vídeo", icon: "🎮", color: "#10b981" };
+  }
+  if (name.includes("prime") || name.includes("b550") || name.includes("a320") || name.includes("b650") || name.includes("h610") || name.includes("b660") || name.includes("z790") || name.includes("placa-mãe") || name.includes("placa mae") || name.includes("motherboard") || tag.includes("placa-mãe") || tag.includes("placa mae") || tag.includes("mobo") || tag.includes("motherboard")) {
+    return { id: "motherboard", label: "Placa-mãe", icon: "🔌", color: "#f59e0b" };
+  }
+  if (name.includes("ram") || name.includes("ddr") || name.includes("memoria") || name.includes("memória") || tag.includes("ram") || tag.includes("memória") || tag.includes("memoria")) {
+    return { id: "ram", label: "Memória RAM", icon: "⚡", color: "#a855f7" };
+  }
+  if (name.includes("fonte") || name.includes("corsair") || name.includes("watts") || name.includes(" psu") || name.includes("bronze") || name.includes("gold") || tag.includes("fonte") || tag.includes("psu") || tag.includes("power")) {
+    return { id: "psu", label: "Fonte", icon: "🔋", color: "#ec4899" };
+  }
+  return { id: "other", label: "Componente", icon: "⚙️", color: "#64748b" };
+}
+
 function renderCatalog() {
   catalogGrid.innerHTML = "";
 
-  if (!state.catalog.length) {
+  const filteredCatalog = state.catalog.filter(item => {
+    if (currentCatalogFilter === "all") return true;
+    const cat = classifyItem(item);
+    return cat.id === currentCatalogFilter;
+  });
+
+  if (!filteredCatalog.length) {
     const card = document.createElement("article");
     card.className = "catalog-card";
+    card.style.gridColumn = "1/-1";
+    card.style.textAlign = "center";
+    card.style.padding = "40px";
     card.innerHTML = `
-      <span class="catalog-badge fallback">Sem dados</span>
-      <h3>N/A</h3>
-      <p>Nenhuma recomendação disponível no momento.</p>
-      <p class="catalog-meta">N/A</p>
+      <span class="catalog-badge fallback">Sem itens</span>
+      <h3 style="margin-top: 12px; color: var(--ink);">Nenhum componente encontrado</h3>
+      <p style="color: var(--ink-soft); font-size: 0.9rem;">Não encontramos itens desta categoria no seu catálogo de recomendações.</p>
     `;
     catalogGrid.appendChild(card);
     return;
   }
 
-  state.catalog.forEach((item) => {
+  filteredCatalog.forEach((item) => {
     const card = document.createElement("article");
     card.className = "catalog-card";
     const isNeo4j = item.origin === "neo4j";
+    const cat = classifyItem(item);
+    
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.justifyContent = "space-between";
+    card.style.gap = "14px";
+    
     card.innerHTML = `
-      <span class="catalog-badge ${isNeo4j ? "neo4j" : "fallback"}">${isNeo4j ? "Neo4j" : "Fallback"}</span>
-      <h3>${item.name  || "N/A"}</h3>
-      <p>${item.tag   || "Sem tag"}</p>
-      <p class="catalog-meta">${item.price  || "Preço indisponível"} · ${item.source || "Fonte não informada"}</p>
-      ${item.name ? `<button class="primary-btn" onclick="abrirModalOfertas('${item.name.replace(/'/g, "\\'")}')" style="margin-top:12px;width:100%;font-size:0.85rem;padding:8px 12px;border-radius:10px;cursor:pointer;">🛒 Comparar Ofertas</button>` : ""}
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+          <span class="catalog-badge ${isNeo4j ? "neo4j" : "fallback"}">${isNeo4j ? "Neo4j" : "Fallback"}</span>
+          <span class="catalog-category-badge" style="background: ${cat.color}15; color: ${cat.color}; border: 1px solid ${cat.color}30; padding: 3px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+            <span>${cat.icon}</span> ${cat.label}
+          </span>
+        </div>
+        <h3 style="margin: 8px 0 4px 0; font-size: 1.05rem; font-weight: 700; line-height: 1.4; color: var(--ink);">${item.name || "N/A"}</h3>
+        <p style="margin: 0; color: var(--ink-soft); font-size: 0.85rem;">${item.tag || "Sem tag"}</p>
+      </div>
+      <div>
+        <p class="catalog-meta" style="margin: 12px 0 0 0; font-weight: 700; color: var(--accent); font-size: 1.05rem;">${item.price || "Preço indisponível"}</p>
+        <p style="margin: 2px 0 12px 0; font-size: 0.72rem; color: var(--ink-soft); font-family: monospace;">Fonte: ${item.source || "N/A"}</p>
+        ${item.name ? `<button class="primary-btn" onclick="abrirModalOfertas('${item.name.replace(/'/g, "\\'")}')" style="width:100%;font-size:0.82rem;padding:8px 12px;border-radius:10px;cursor:pointer; font-weight: 700;">🛒 Comparar Ofertas</button>` : ""}
+      </div>
     `;
     catalogGrid.appendChild(card);
   });
@@ -953,6 +1002,16 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
   });
 });
 
+// Filtro do catálogo
+document.querySelectorAll(".filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentCatalogFilter = btn.dataset.category;
+    renderCatalog();
+  });
+});
+
 document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     clearAuthMessages();
@@ -1089,16 +1148,18 @@ function renderOffersIntoContainer(container, offers) {
       : `R$ ${offer.price}`;
       
     const liveIndicator = offer.is_live 
-      ? `<span style="font-size: 0.65rem; color: #34d399; position: absolute; top: 12px; right: 12px; background: rgba(52,211,153,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">● LIVE</span>`
-      : `<span style="font-size: 0.65rem; color: #f59e0b; position: absolute; top: 12px; right: 12px; background: rgba(245,158,11,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">● ESTIMADO</span>`;
+      ? `<span class="offer-status-badge live">● LIVE</span>`
+      : `<span class="offer-status-badge estimado">● ESTIMADO</span>`;
       
     card.innerHTML = `
-      ${liveIndicator}
       <div class="offer-header">
         <div class="offer-thumb-container">
           <img class="offer-thumb" src="${thumbUrl}" alt="Thumbnail" onerror="this.src='${fallbackImage}'" />
         </div>
-        <span class="offer-store-badge ${storeClass}">${offer.store}</span>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: 1;">
+          <span class="offer-store-badge ${storeClass}">${offer.store}</span>
+          ${liveIndicator}
+        </div>
       </div>
       <h5 class="offer-title" title="${offer.title}">${offer.title}</h5>
       <div class="offer-price-container">
