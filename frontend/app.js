@@ -224,8 +224,24 @@ function renderOverview() {
   diagnosticList.innerHTML = "";
   const diags = state.diagnostics.length ? state.diagnostics : DEFAULT_DIAGNOSTICS;
   diags.forEach((item) => {
+    if (item === "N/A" || !item) return;
     const li = document.createElement("li");
-    li.textContent = item;
+    li.className = "diagnostic-item";
+    
+    let icon = "⚙️";
+    let typeClass = "info";
+    
+    const lowerItem = item.toLowerCase();
+    if (lowerItem.includes("gargalo") || lowerItem.includes("alto") || lowerItem.includes("atenção") || lowerItem.includes("limitando") || lowerItem.includes("warning") || lowerItem.includes("⚠️") || lowerItem.includes("antigo") || lowerItem.includes("atraso")) {
+      icon = "⚠️";
+      typeClass = "warning";
+    } else if (lowerItem.includes("bom") || lowerItem.includes("suficiente") || lowerItem.includes("ok") || lowerItem.includes("sucesso") || lowerItem.includes("ótimo") || lowerItem.includes("ótima") || lowerItem.includes("compatível") || lowerItem.includes("excelente")) {
+      icon = "✅";
+      typeClass = "success";
+    }
+    
+    li.innerHTML = `<span class="diag-icon">${icon}</span> <span class="diag-text">${item}</span>`;
+    li.classList.add(typeClass);
     diagnosticList.appendChild(li);
   });
 }
