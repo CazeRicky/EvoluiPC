@@ -2,6 +2,7 @@ import csv
 import json
 import os
 
+
 def limpar_preco(valor_str):
     if not valor_str or str(valor_str).strip() == "":
         return 0.0
@@ -10,6 +11,7 @@ def limpar_preco(valor_str):
         return float(limpo)
     except ValueError:
         return 0.0
+
 
 def simplificar_soquete(socket_string):
     if not socket_string:
@@ -23,52 +25,105 @@ def simplificar_soquete(socket_string):
     if "AM3" in s: return "AM3"
     return str(socket_string).split('/')[0].strip()
 
+
+def _primeiro_valor(linha, *chaves):
+    """Retorna o primeiro valor não vazio dentre várias colunas possíveis.
+    Permite aceitar CSVs de fontes diferentes sem reescrever o ETL."""
+    for chave in chaves:
+        valor = linha.get(chave)
+        if valor not in (None, ""):
+            return valor
+    return ""
+
+_MICROARQUITETURA_PARA_SOQUETE = {
+    # AMD
+    "zen 5": "AM5",
+    "zen 4": "AM5",
+    "zen 3": "AM4",
+    "zen 3+": "AM4",
+    "zen 2": "AM4",
+    "zen+": "AM4",
+    "zen": "AM4",
+    # Intel
+    "arrow lake": "LGA1851",
+    "raptor lake": "LGA1700",
+    "raptor lake refresh": "LGA1700",
+    "alder lake": "LGA1700",
+    "rocket lake": "LGA1200",
+    "comet lake": "LGA1200",
+    "coffee lake": "LGA1151",
+    "coffee lake refresh": "LGA1151",
+    "kaby lake": "LGA1151",
+    "skylake": "LGA1151",
+}
+
+
+def _soquete_por_microarquitetura(microarquitetura):
+    if not microarquitetura:
+        return ""
+    chave = str(microarquitetura).strip().lower()
+    return _MICROARQUITETURA_PARA_SOQUETE.get(chave, "")
+
+
 def rodar_etl():
     print("Iniciando conversão CSV -> JSON...")
     hardware_limpo = {"processadores": [], "placas_de_video": [], "placas_mae": []}
 
-    # 1. CPUs
     try:
         with open('cpus_github.csv', mode='r', encoding='utf-8') as f:
             for linha in csv.DictReader(f):
-                nome = linha.get('CpuName', linha.get('name', ''))
+                nome = _primeiro_valor(linha, 'CpuName', 'name', 'Name')
                 nome = nome.split('-')[0].strip() if '-' in nome else nome
-                soquete = simplificar_soquete(linha.get('Socket', linha.get('socket', '')))
-                preco = limpar_preco(linha.get('Price at introduction', linha.get('price', '0')))
+                soquete_bruto = _primeiro_valor(linha, 'Socket', 'socket')
+                if not soquete_bruto:
+                    soquete_bruto = _soquete_por_microarquitetura(
+                        _primeiro_valor(linha, 'microarchitecture')
+                    )
+                soquete = simplificar_soquete(soquete_bruto)
+                preco = limpar_preco(_primeiro_valor(linha, 'Price at introduction', 'price', 'Price'))
                 if nome and soquete != "Desconhecido":
                     hardware_limpo["processadores"].append({
                         "nome": nome, "soquete": soquete, "tier": "Mid", "preco": preco if preco > 0 else 500
                     })
         print(f"✅ {len(hardware_limpo['processadores'])} CPUs processadas.")
-    except Exception as e: print(f"⚠️ Erro nas CPUs: {e}")
+    except Exception as e:
+        print(f"⚠️ Erro nas CPUs: {e}")
 
-    # 2. GPUs
     try:
         with open('gpus_github.csv', mode='r', encoding='utf-8') as f:
             for linha in csv.DictReader(f):
-                nome = linha.get('gpuName', linha.get('name', ''))
-                preco = limpar_preco(linha.get('price', '0'))
-                pts = linha.get('G3Dmark', '0')
+                nome = _primeiro_valor(linha, 'gpuName', 'name', 'chipset', 'Name')
+                preco = limpar_preco(_primeiro_valor(linha, 'price', 'Price'))
+                pts = _primeiro_valor(linha, 'G3Dmark', 'benchmark')
                 pontos = int(pts) if str(pts).isdigit() else 0
                 if nome:
-                    tier = "Low"
-                    if pontos > 10000: tier = "Mid"
-                    if pontos > 18000: tier = "High"
-                    if pontos > 25000: tier = "Ultra"
+                    if pontos > 0:
+                        tier = "Low"
+                        if pontos > 10000: tier = "Mid"
+                        if pontos > 18000: tier = "High"
+                        if pontos > 25000: tier = "Ultra"
+                    else:
+                        # Sem benchmark disponível (ex.: docyx não traz G3Dmark),
+                        # usa o preço como proxy aproximado de tier.
+                        tier = "Low"
+                        if preco > 1500: tier = "Mid"
+                        if preco > 3000: tier = "High"
+                        if preco > 6000: tier = "Ultra"
                     hardware_limpo["placas_de_video"].append({
                         "nome": nome, "tier": tier, "preco": preco if preco > 0 else 1000
                     })
         print(f"✅ {len(hardware_limpo['placas_de_video'])} GPUs processadas.")
-    except Exception as e: print(f"⚠️ Erro nas GPUs: {e}")
+    except Exception as e:
+        print(f"⚠️ Erro nas GPUs: {e}")
 
-    # 3. Placas-Mãe
     try:
         with open('mobos_github.csv', mode='r', encoding='utf-8') as f:
             for linha in csv.DictReader(f):
-                nome = linha.get('name', '')
-                soquete = simplificar_soquete(linha.get('socket', ''))
-                preco = limpar_preco(linha.get('price', '0'))
-                ram_tipo = "DDR5" if "DDR5" in str(linha.get('memory_type', '')).upper() else "DDR4"
+                nome = _primeiro_valor(linha, 'name', 'Name')
+                soquete = simplificar_soquete(_primeiro_valor(linha, 'socket', 'Socket'))
+                preco = limpar_preco(_primeiro_valor(linha, 'price', 'Price'))
+                ram_tipo_raw = _primeiro_valor(linha, 'memory_type', 'ram_type')
+                ram_tipo = "DDR5" if "DDR5" in str(ram_tipo_raw).upper() else "DDR4"
                 if nome and soquete != "Desconhecido":
                     hardware_limpo["placas_mae"].append({
                         "nome": nome, "soquete": soquete, "ram_tipo": ram_tipo, "preco": preco if preco > 0 else 600
@@ -86,6 +141,7 @@ def rodar_etl():
     with open('hardware.json', 'w', encoding='utf-8') as f:
         json.dump(hardware_limpo, f, indent=4, ensure_ascii=False)
     print("🚀 ETL Concluído! hardware.json gerado.")
+
 
 if __name__ == "__main__":
     rodar_etl()

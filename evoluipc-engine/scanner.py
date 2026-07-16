@@ -1,8 +1,6 @@
 import multiprocessing
-import threading
 import time
 import psutil
-import cpuinfo
 import requests
 import sys
 
@@ -21,35 +19,25 @@ MAX_RETRIES = 3
 def ler_hardware_local():
     print("🔍 Varrendo hardware da máquina...")
 
-    resultado_cpu = {}
-
-    def buscar_cpu():
-        info = cpuinfo.get_cpu_info()
-        resultado_cpu["nome"] = info.get("brand_raw", "Processador não identificado")
-
-    thread_cpu = threading.Thread(target=buscar_cpu)
-    thread_cpu.start()
-
-    print("   Aguardando leitura da CPU", end="", flush=True)
-    while thread_cpu.is_alive():
-        print(".", end="", flush=True)
-        time.sleep(1)
-    thread_cpu.join()
-    print(" OK")
-
-    nome_cpu = resultado_cpu.get("nome", "Processador não identificado")
-    ram_gb = round(psutil.virtual_memory().total / (1024 ** 3))
-
+    nome_cpu = "Processador não identificado"
     nome_gpu = "Não identificada"
     nome_placa_mae = "Não identificada"
 
     if wmi is not None:
         try:
             w = wmi.WMI()
+
+            for cpu in w.Win32_Processor():
+                nome = getattr(cpu, "Name", None)
+                if nome:
+                    nome_cpu = nome.strip()
+                    break
+
             for gpu in w.Win32_VideoController():
                 if getattr(gpu, "Name", None):
                     nome_gpu = gpu.Name
                     break
+
             for board in w.Win32_BaseBoard():
                 fabricante = getattr(board, "Manufacturer", "") or ""
                 produto = getattr(board, "Product", "") or ""
@@ -58,7 +46,9 @@ def ler_hardware_local():
         except Exception as e:
             print(f"⚠️  Erro WMI: {e}")
     else:
-        print("⚠️  WMI indisponível. GPU e placa-mãe podem não ser detectadas.")
+        print("⚠️  WMI indisponível. CPU, GPU e placa-mãe podem não ser detectadas.")
+
+    ram_gb = round(psutil.virtual_memory().total / (1024 ** 3))
 
     return {
         "cpu": nome_cpu,
