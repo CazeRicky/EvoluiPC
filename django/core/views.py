@@ -546,3 +546,32 @@ class ScanHistoryView(APIView):
                 {"detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+from rest_framework.decorators import permission_classes
+from .scraper_service import get_best_offers
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_component_offers(request):
+    """
+    Busca ofertas para uma peça de hardware informada no query parameter 'query'.
+    Ex: /api/hardware/offers?query=Ryzen+5+5600
+    """
+    query = request.query_params.get('query', '')
+    if not query:
+        return Response({"detail": "O parametro 'query' e obrigatorio."}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        offers = get_best_offers(query)
+        return Response({
+            "query": query,
+            "offers": offers,
+            "count": len(offers)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.exception("Erro ao buscar ofertas de hardware")
+        return Response(
+            {"detail": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
