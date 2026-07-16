@@ -38,10 +38,71 @@ def get_db_price_for_hardware(name):
                 if record:
                     p = record.get("price") or record.get("preco")
                     if p:
-                        return float(p)
+                        if isinstance(p, (int, float)):
+                            return float(p)
+                        return clean_price_string(str(p))
     except Exception:
         pass
     return None
+
+def clean_hardware_name_for_search(name):
+    """
+    Limpa nomes de hardware complexos/longos vindos do banco de dados (ex: 'MSI RTX 4070 Ti SUPER 16G VENTUS 3X BLACK OC')
+    para termos de pesquisa mais limpos e assertivos na internet (ex: 'MSI RTX 4070 Ti SUPER').
+    """
+    if not name:
+        return ""
+        
+    name_upper = name.upper()
+    
+    # 1. Tentar detectar placa de vídeo (GPU)
+    brand = ""
+    for b in ["MSI", "GIGABYTE", "ASUS", "GALAX", "SAPPHIRE", "POWERCOLOR", "ASROCK", "PNY", "ZOTAC", "XFX", "GAINWARD", "EVGA"]:
+        if b in name_upper:
+            brand = b
+            break
+            
+    # Procura o modelo da GPU (ex: RTX 4070 Ti Super, RX 6600 XT, GTX 1650)
+    gpu_match = re.search(
+        r"(RTX\s*\d{4}(?:\s*TI)?(?:\s*SUPER)?|GTX\s*\d{4}(?:\s*TI)?|RX\s*\d{4}(?:\s*XT)?|RADEON\s*RX\s*\d{4}(?:\s*XT)?)",
+        name_upper
+    )
+    if gpu_match:
+        model = gpu_match.group(1)
+        cleaned = f"{brand} {model}".strip()
+        return re.sub(r"\s+", " ", cleaned)
+        
+    # 2. Tentar detectar processador (CPU)
+    cpu_match = re.search(
+        r"(RYZEN\s*\d\s*\d{4}(?:\s*X3D|\s*X|\s*G)?|CORE\s*I\d-\d{4,5}(?:\s*K|\s*KF|\s*F)?|I\d-\d{4,5}(?:\s*K|\s*KF|\s*F)?)",
+        name_upper
+    )
+    if cpu_match:
+        model = cpu_match.group(1)
+        mfg = "AMD" if "RYZEN" in name_upper else "Intel"
+        cleaned = f"{mfg} {model}"
+        if "CORE" in name_upper and "CORE" not in cleaned.upper():
+            cleaned = f"Intel Core {model}"
+        return re.sub(r"\s+", " ", cleaned)
+        
+    # 3. Tentar detectar placa-mãe (Motherboard)
+    mb_match = re.search(
+        r"(A320M?|B450M?|B550M?|X570M?|A620M?|B650M?|X670M?|H610M?|B660M?|B760M?|Z690M?|Z790M?)",
+        name_upper
+    )
+    if mb_match:
+        chipset = mb_match.group(1)
+        mb_brand = ""
+        for b in ["ASUS", "GIGABYTE", "MSI", "ASROCK", "BIOSTAR"]:
+            if b in name_upper:
+                mb_brand = b
+                break
+        return f"{mb_brand} {chipset}".strip()
+        
+    # Limpeza padrão para outros componentes
+    name_cleaned = re.sub(r"\b\d+G[B]?\b", "", name_upper)
+    name_cleaned = re.sub(r"\b(VENTUS|WIND-FORCE|WINDFORCE|GAMING X|OC|BLACK|WHITE|TRIPLE FAN|DUAL FAN|COOLER|EDITION)\b", "", name_cleaned)
+    return name_cleaned.strip().title()
 
 def extract_price_from_text(text):
     """Tenta extrair um valor de preço (R$) de um texto de snippet."""
@@ -56,7 +117,10 @@ def get_exact_link_and_price_from_ddg(store_domain, query):
     """
     Busca no DuckDuckGo a página exata do produto e tenta obter o preço real no snippet.
     """
-    search_query = f"site:{store_domain} {query}"
+    # Usa a versão limpa do nome do produto para a pesquisa
+    cleaned_query = clean_hardware_name_for_search(query)
+    search_query = f"site:{store_domain} {cleaned_query}"
+    
     encoded_query = urllib.parse.quote(search_query)
     url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
     
@@ -200,7 +264,9 @@ def get_best_offers(query):
         }
     ]
     
-    query_slug = urllib.parse.quote_plus(query_cleaned)
+    # Gera slug de busca limpo
+    cleaned_query_for_search = clean_hardware_name_for_search(query_cleaned)
+    query_slug = urllib.parse.quote_plus(cleaned_query_for_search)
     final_offers = []
     
     for info in stores_info:

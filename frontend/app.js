@@ -4,8 +4,6 @@ const DEFAULT_MACHINE_STATE = {
   ram: "N/A",
   storage: "N/A",
   motherboard: "N/A",
-  psu: "N/A",
-  bottleneck: "N/A",
 };
 
 const DEFAULT_DIAGNOSTICS = ["N/A"];
@@ -213,7 +211,7 @@ function renderOverview() {
   };
 
   Object.entries(state.machine).forEach(([key, value]) => {
-    if (key === "cpu_tier" || key === "gpu_tier") return;
+    if (key === "cpu_tier" || key === "gpu_tier" || key === "bottleneck" || key === "psu") return;
     const card = document.createElement("article");
     card.className = "metric-card";
     card.innerHTML = `
@@ -243,6 +241,24 @@ function renderRoute() {
   });
 }
 
+function formatBRL(price) {
+  if (price === undefined || price === null || price === "Preço indisponível" || price === "N/A" || price === 0) {
+    return "Preço indisponível";
+  }
+  if (typeof price === "string") {
+    if (price.trim().startsWith("R$")) return price;
+    const num = parseFloat(price.replace(/[^\d.-]/g, ""));
+    if (!isNaN(num)) {
+      return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+    return price;
+  }
+  if (typeof price === "number") {
+    return price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+  return "Preço indisponível";
+}
+
 function classifyItem(item) {
   const name = (item.name || "").toLowerCase();
   const tag = (item.tag || "").toLowerCase();
@@ -260,7 +276,10 @@ function classifyItem(item) {
     return { id: "ram", label: "Memória RAM", icon: "⚡", color: "#a855f7" };
   }
   if (name.includes("fonte") || name.includes("corsair") || name.includes("watts") || name.includes(" psu") || name.includes("bronze") || name.includes("gold") || tag.includes("fonte") || tag.includes("psu") || tag.includes("power")) {
-    return { id: "psu", label: "Fonte", icon: "🔋", color: "#ec4899" };
+    return { id: "psu", label: "Fonte", icon: "🔋", color: "#6366f1" };
+  }
+  if (name.includes("ssd") || name.includes("hd ") || name.includes("hd") || name.includes("disco rigido") || name.includes("disco rígido") || name.includes("kingston") || name.includes("crucial") || name.includes("samsung evo") || name.includes("nvme") || name.includes("sata") || name.includes("armazenamento") || tag.includes("storage") || tag.includes("armazenamento") || tag.includes("ssd") || tag.includes("hd")) {
+    return { id: "storage", label: "HD / SSD", icon: "💾", color: "#ec4899" };
   }
   return { id: "other", label: "Componente", icon: "⚙️", color: "#64748b" };
 }
@@ -302,8 +321,7 @@ function renderCatalog() {
     
     card.innerHTML = `
       <div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-          <span class="catalog-badge ${isNeo4j ? "neo4j" : "fallback"}">${isNeo4j ? "Neo4j" : "Fallback"}</span>
+        <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
           <span class="catalog-category-badge" style="background: ${cat.color}15; color: ${cat.color}; border: 1px solid ${cat.color}30; padding: 3px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
             <span>${cat.icon}</span> ${cat.label}
           </span>
@@ -312,7 +330,7 @@ function renderCatalog() {
         <p style="margin: 0; color: var(--ink-soft); font-size: 0.85rem;">${item.tag || "Sem tag"}</p>
       </div>
       <div>
-        <p class="catalog-meta" style="margin: 12px 0 0 0; font-weight: 700; color: var(--accent); font-size: 1.05rem;">${item.price || "Preço indisponível"}</p>
+        <p class="catalog-meta" style="margin: 12px 0 0 0; font-weight: 700; color: var(--accent); font-size: 1.05rem;">${formatBRL(item.price)}</p>
         <p style="margin: 2px 0 12px 0; font-size: 0.72rem; color: var(--ink-soft); font-family: monospace;">Fonte: ${item.source || "N/A"}</p>
         ${item.name ? `<button class="primary-btn" onclick="abrirModalOfertas('${item.name.replace(/'/g, "\\'")}')" style="width:100%;font-size:0.82rem;padding:8px 12px;border-radius:10px;cursor:pointer; font-weight: 700;">🛒 Comparar Ofertas</button>` : ""}
       </div>
@@ -923,7 +941,7 @@ async function carregarRotaUpgrade() {
               <span style="background:${sourceBadgeBg};color:#000;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:bold;">${sourceLabel}</span>
             </div>
             <h2 style="margin:16px 0 8px 0;font-size:28px;color:#ffffff;">${upgrade.recommendation}</h2>
-            <p style="margin:8px 0;font-size:18px;color:#b0b0b0;"><strong>Investimento estimado:</strong> <span style="color:${sourceBorderColor};font-size:20px;font-weight:bold;">R$ ${upgrade.estimatedPrice || "N/A"}</span></p>
+            <p style="margin:8px 0;font-size:18px;color:#b0b0b0;"><strong>Investimento estimado:</strong> <span style="color:${sourceBorderColor};font-size:20px;font-weight:bold;">${formatBRL(upgrade.estimatedPrice)}</span></p>
             <p style="margin:12px 0;color:#a0a0a0;line-height:1.6;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
             ${upgrade.device_type ? `<p style="margin:8px 0;color:#808080;font-size:13px;">📱 Dispositivo: <strong style="color:${sourceBorderColor};">${upgrade.device_type}</strong></p>` : ""}
             ${upgrade.note ? `<p style="margin:8px 0;color:#ffcccc;font-size:13px;background:#332222;padding:8px 12px;border-radius:4px;border-left:3px solid #ff6b6b;">⚠️ ${upgrade.note}</p>` : ""}
