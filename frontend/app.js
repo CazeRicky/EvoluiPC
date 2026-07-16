@@ -245,18 +245,40 @@ function formatBRL(price) {
   if (price === undefined || price === null || price === "Preço indisponível" || price === "N/A" || price === 0) {
     return "Preço indisponível";
   }
-  if (typeof price === "string") {
-    if (price.trim().startsWith("R$")) return price;
-    const num = parseFloat(price.replace(/[^\d.-]/g, ""));
-    if (!isNaN(num)) {
-      return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  
+  let str = String(price).trim();
+  
+  // Remove "R$" se houver
+  str = str.replace(/R\$\s*/g, "");
+  
+  // Se tiver um ponto seguido de 1 ou 2 dígitos no final da primeira parte antes da vírgula
+  // Ex: "99.97,00"
+  if (str.includes(".") && str.includes(",")) {
+    const parts = str.split(",");
+    const beforeComma = parts[0]; // "99.97" ou "1.250"
+    const afterComma = parts[1];  // "00"
+    
+    // Procura o ponto final em beforeComma
+    const dotIndex = beforeComma.lastIndexOf(".");
+    const digitsAfterDot = beforeComma.length - 1 - dotIndex;
+    
+    if (digitsAfterDot === 2 || digitsAfterDot === 1) {
+      // É decimal! Ignora o ",00" posterior e trata parts[0] como o número real
+      str = beforeComma;
+    } else {
+      // É milhar! Ex: "1.250,00" -> remove ponto do milhar e troca virgula por ponto
+      str = beforeComma.replace(/\./g, "") + "." + afterComma;
     }
-    return price;
+  } else if (str.includes(",")) {
+    // Se só tem vírgula: "99,87" -> troca por ponto
+    str = str.replace(/\./g, "").replace(",", ".");
   }
-  if (typeof price === "number") {
-    return price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  
+  const num = parseFloat(str);
+  if (!isNaN(num)) {
+    return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
-  return "Preço indisponível";
+  return String(price);
 }
 
 function classifyItem(item) {
@@ -323,7 +345,7 @@ function renderCatalog() {
       <div>
         <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
           <span class="catalog-category-badge" style="background: ${cat.color}15; color: ${cat.color}; border: 1px solid ${cat.color}30; padding: 3px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-            <span>${cat.icon}</span> ${cat.label}
+            <span class="catalog-category-icon">${cat.icon}</span> ${cat.label}
           </span>
         </div>
         <h3 style="margin: 8px 0 4px 0; font-size: 1.05rem; font-weight: 700; line-height: 1.4; color: var(--ink);">${item.name || "N/A"}</h3>
