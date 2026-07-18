@@ -1,0 +1,34 @@
+
+Optimized tool selection
+
+Vou analisar a estrutura atual do backend e do grafo para implementar a rota de upgrade de GPU com compatibilidade real, incluindo gargalo de CPU/placa-mãe e validação de compatibilidade.
+
+Vou implementar a lógica em duas partes: primeiro a camada de recomendação no Neo4j e depois a nova rota da API, com uma validação simples de gargalo CPU→GPU e compatibilidade com a placa-mãe.
+
+Estou implementando uma recomendação de GPU com validação de gargalo de CPU, compatibilidade com a placa-mãe e fallback seguro.
+
+A lógica já está no backend; vou validar a aplicação para garantir que a nova rota e os imports estão corretos.
+
+Compacted conversation
+
+O erro de validação aponta para um import ausente no módulo de URLs; estou ajustando isso e revalidando o backend.
+
+✅ Atualização aplicada
+A recomendação de GPU agora foi integrada ao backend com:
+
+análise de gargalo de CPU,
+compatibilidade com a placa-mãe,
+fallback seguro quando o grafo não retorna dados,
+rota específica para o endpoint de GPU.
+Arquivos atualizados
+neo4j_store.py
+views.py
+urls.py
+seed_hardware.py
+Validação
+Executei a verificação do Django e o resultado foi:
+
+“System check identified no issues (0 silenced).”
+Você pode testar a nova rota via:
+
+GET /api/upgrade-

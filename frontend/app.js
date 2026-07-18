@@ -840,25 +840,38 @@ async function carregarRotaUpgrade() {
       return;
     }
 
-    const resposta = await fetch(
-      `${BACKEND_URL}/api/upgrade-route/me/`,
-      {
+    // Buscar tanto CPU quanto GPU em paralelo
+    const [respostaCpu, respostaGpu] = await Promise.all([
+      fetch(`${BACKEND_URL}/api/upgrade-route/me/`, {
         method:  "GET",
         headers: {
           "Content-Type": "application/json",
           Authorization:  `Token ${token}`,
         },
-      }
-    );
+      }),
+      fetch(`${BACKEND_URL}/api/upgrade-route/gpu/`, {
+        method:  "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:  `Token ${token}`,
+        },
+      })
+    ]);
 
-    if (!resposta.ok) throw new Error(`Erro na API: Status ${resposta.status}`);
+    if (!respostaCpu.ok) throw new Error(`Erro na API CPU: Status ${respostaCpu.status}`);
+    if (!respostaGpu.ok) throw new Error(`Erro na API GPU: Status ${respostaGpu.status}`);
 
-    const dados = await parseJsonSafely(resposta);
+    const dadosCpu = await parseJsonSafely(respostaCpu);
+    const dadosGpu = await parseJsonSafely(respostaGpu);
 
-    const lista = Array.isArray(dados) ? dados : (dados?.route || []);
+    const listaCpu = Array.isArray(dadosCpu) ? dadosCpu : (dadosCpu?.route || []);
+    const listaGpu = Array.isArray(dadosGpu) ? dadosGpu : [];
 
-    if (lista.length > 0) {
-      const upgrade = lista[0];
+    let htmlResult = "";
+
+    // Renderizar recomendação de CPU
+    if (listaCpu.length > 0) {
+      const upgrade = listaCpu[0];
 
       if (upgrade.recommendation) {
         const sourceLabel = upgrade.source === "neo4j" ? "🗄️ Base de Dados" : "📋 Recomendação Padrão";
@@ -866,8 +879,8 @@ async function carregarRotaUpgrade() {
         const sourceBorderColor = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
         const sourceBadgeBg = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
         
-        resultadoDiv.innerHTML = `
-          <div style="background:${sourceBgColor};padding:24px;border-radius:12px;border-left:6px solid ${sourceBorderColor};box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+        htmlResult += `
+          <div style="background:${sourceBgColor};padding:24px;border-radius:12px;border-left:6px solid ${sourceBorderColor};box-shadow:0 2px 8px rgba(0,0,0,0.3);margin-bottom:16px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
               <h3 style="margin:0;color:${sourceBorderColor};font-size:16px;">🔥 Upgrade Recomendado: ${upgrade.component || "Componente"}</h3>
               <span style="background:${sourceBadgeBg};color:#000;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:bold;">${sourceLabel}</span>
@@ -878,27 +891,41 @@ async function carregarRotaUpgrade() {
             ${upgrade.device_type ? `<p style="margin:8px 0;color:#808080;font-size:13px;">📱 Dispositivo: <strong style="color:${sourceBorderColor};">${upgrade.device_type}</strong></p>` : ""}
             ${upgrade.note ? `<p style="margin:8px 0;color:#ffcccc;font-size:13px;background:#332222;padding:8px 12px;border-radius:4px;border-left:3px solid #ff6b6b;">⚠️ ${upgrade.note}</p>` : ""}
           </div>`;
-      } else {
-        const sourceLabel = upgrade.source === "neo4j" ? "🗄️ Base de Dados" : "📋 Recomendação Padrão";
-        const sourceBgColor = upgrade.source === "neo4j" ? "#0d1b2a" : "#1a1410";
-        const sourceBorderColor = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
-        const sourceBadgeBg = upgrade.source === "neo4j" ? "#00d4ff" : "#ffa500";
-        
-        resultadoDiv.innerHTML = `
-          <div style="background:${sourceBgColor};padding:24px;border-radius:12px;border-left:6px solid ${sourceBorderColor};box-shadow:0 2px 8px rgba(0,0,0,0.3);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-              <h3 style="margin:0;color:${sourceBorderColor};font-size:16px;">🔥 Próximo Upgrade</h3>
-              <span style="background:${sourceBadgeBg};color:#000;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:bold;">${sourceLabel}</span>
-            </div>
-            <h2 style="margin:16px 0 8px 0;font-size:28px;color:#ffffff;">${upgrade.action || "N/A"}</h2>
-            <p style="margin:8px 0;font-size:18px;color:#b0b0b0;"><strong>Etapa:</strong> <strong style="color:${sourceBorderColor};">${upgrade.step || "N/A"}</strong></p>
-            <p style="margin:12px 0;color:#a0a0a0;line-height:1.6;"><strong>Impacto:</strong> ${upgrade.impact || "Sem impacto informado."}</p>
-          </div>`;
       }
-    } else {
-      resultadoDiv.innerHTML = "<p>Nenhuma recomendação encontrada no momento.</p>";
     }
 
+    // Renderizar recomendação de GPU
+    if (listaGpu.length > 0) {
+      const upgrade = listaGpu[0];
+
+      if (upgrade.recommendation) {
+        const sourceLabel = upgrade.source === "neo4j" ? "🗄️ Base de Dados" : "📋 Recomendação Padrão";
+        const sourceBgColor = upgrade.source === "neo4j" ? "#1a0d2a" : "#1a1410";
+        const sourceBorderColor = upgrade.source === "neo4j" ? "#ff00ff" : "#ffa500";
+        const sourceBadgeBg = upgrade.source === "neo4j" ? "#ff00ff" : "#ffa500";
+        
+        htmlResult += `
+          <div style="background:${sourceBgColor};padding:24px;border-radius:12px;border-left:6px solid ${sourceBorderColor};box-shadow:0 2px 8px rgba(0,0,0,0.3);margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;color:${sourceBorderColor};font-size:16px;">🎮 Upgrade Recomendado: ${upgrade.component || "Componente"}</h3>
+              <span style="background:${sourceBadgeBg};color:#000;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:bold;">${sourceLabel}</span>
+            </div>
+            <h2 style="margin:16px 0 8px 0;font-size:28px;color:#ffffff;">${upgrade.recommendation}</h2>
+            <p style="margin:8px 0;font-size:18px;color:#b0b0b0;"><strong>Investimento estimado:</strong> <span style="color:${sourceBorderColor};font-size:20px;font-weight:bold;">R$ ${upgrade.estimatedPrice || "N/A"}</span></p>
+            <p style="margin:12px 0;color:#a0a0a0;line-height:1.6;"><strong>Por que?</strong> ${upgrade.reason || "Sem justificativa disponível."}</p>
+            ${upgrade.bottleneck ? `<p style="margin:8px 0;color:${upgrade.bottleneck === 'high' ? '#ff6b6b' : upgrade.bottleneck === 'medium' ? '#ffd93d' : '#6bcb77'};font-size:13px;">⚡ Gargalo CPU: <strong>${upgrade.bottleneck === 'high' ? 'Alto' : upgrade.bottleneck === 'medium' ? 'Médio' : 'Baixo'}</strong></p>` : ""}
+            ${upgrade.compatibleWithMotherboard ? `<p style="margin:8px 0;color:#808080;font-size:13px;">🔌 Compatível com placa-mãe: <strong style="color:${sourceBorderColor};">Sim</strong></p>` : ""}
+            ${upgrade.details ? `<p style="margin:8px 0;color:#808080;font-size:13px;">📊 Detalhes: <strong style="color:${sourceBorderColor};">${upgrade.details.powerWatts}W · ${upgrade.details.memoryGb}GB · ${upgrade.details.interface}</strong></p>` : ""}
+            ${upgrade.device_type ? `<p style="margin:8px 0;color:#808080;font-size:13px;">📱 Dispositivo: <strong style="color:${sourceBorderColor};">${upgrade.device_type}</strong></p>` : ""}
+          </div>`;
+      }
+    }
+
+    if (htmlResult === "") {
+      htmlResult = "<p>Nenhuma recomendação encontrada no momento.</p>";
+    }
+
+    resultadoDiv.innerHTML = htmlResult;
     resultadoDiv.style.display = "block";
   } catch (erro) {
     console.error("[EvoluiPC] Falha ao buscar upgrade:", erro);
